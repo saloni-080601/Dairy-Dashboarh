@@ -1,4 +1,4 @@
-import { MilkEntry, DailyRecord, RateSettings, TenDayPeriod, FormulaMode, MilkType } from '../types/dairy';
+import { MilkEntry, DailyRecord, RateSettings, TenDayPeriod, MilkType } from '../types/dairy';
 import { format, getDaysInMonth } from 'date-fns';
 import { lookupRateFromChart, calculateChartSNF } from './rateChartData';
 

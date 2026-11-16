@@ -58,54 +58,54 @@ export const MonthlySummaryTable: React.FC = () => {
   }), { days: 0, morningLitres: 0, eveningLitres: 0, totalLitres: 0, amount: 0, weightedFat: 0 });
 
   return (
-    <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm" aria-labelledby="monthly-summary-heading">
-      <div className="flex items-center gap-3 border-b border-slate-200 px-4 py-4 sm:px-5">
-        <div className="rounded-xl bg-violet-50 p-2 text-violet-700"><CalendarRange className="h-5 w-5" /></div>
+    <section className="panel" aria-labelledby="monthly-summary-heading">
+      <div className="flex items-center gap-3 border-b border-ink-100 px-4 py-4 sm:px-5">
+        <div className="rounded-lg bg-ink-50 p-2 text-forest-800"><CalendarRange className="h-5 w-5" /></div>
         <div>
-          <h2 id="monthly-summary-heading" className="text-sm font-bold text-slate-900">Monthly Collection Summary</h2>
-          <p className="text-xs text-slate-500">Month-wise milk quantity, collection days and payable amount.</p>
+          <h2 id="monthly-summary-heading" className="text-sm font-semibold text-ink-900">Monthly collection</h2>
+          <p className="text-xs text-ink-400">Milk, days and payable amount by month.</p>
         </div>
       </div>
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[850px] text-left text-xs">
-          <thead className="bg-slate-50 text-[10px] uppercase tracking-wider text-slate-500">
+        <table className="data-table min-w-[850px] text-xs">
+          <thead>
             <tr>
-              <th className="px-4 py-3">Month</th>
-              <th className="px-4 py-3 text-right">Days</th>
-              <th className="px-4 py-3 text-right">Morning (L)</th>
-              <th className="px-4 py-3 text-right">Evening (L)</th>
-              <th className="px-4 py-3 text-right">Total Milk (L)</th>
-              <th className="px-4 py-3 text-right">Avg Fat</th>
-              <th className="px-4 py-3 text-right">Avg Rate</th>
-              <th className="px-4 py-3 text-right">Total Amount</th>
+              <th>Month</th>
+              <th className="text-right">Days</th>
+              <th className="text-right">Morning (L)</th>
+              <th className="text-right">Evening (L)</th>
+              <th className="text-right">Total milk</th>
+              <th className="text-right">Avg fat</th>
+              <th className="text-right">Avg rate</th>
+              <th className="text-right">Amount</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-100">
+          <tbody>
             {months.length ? months.map((month) => (
-              <tr key={month.key} className="hover:bg-slate-50">
-                <td className="whitespace-nowrap px-4 py-3 font-semibold text-slate-800">{month.label}</td>
-                <td className="px-4 py-3 text-right text-slate-600">{month.days}</td>
-                <td className="px-4 py-3 text-right text-amber-800">{litres(month.morningLitres)}</td>
-                <td className="px-4 py-3 text-right text-blue-800">{litres(month.eveningLitres)}</td>
-                <td className="px-4 py-3 text-right font-semibold text-slate-800">{litres(month.totalLitres)}</td>
-                <td className="px-4 py-3 text-right text-slate-600">{month.totalLitres ? `${(month.weightedFat / month.totalLitres).toFixed(2)}%` : '—'}</td>
-                <td className="px-4 py-3 text-right text-slate-600">{month.totalLitres ? money(month.amount / month.totalLitres) : '—'}</td>
-                <td className="px-4 py-3 text-right font-bold text-emerald-700">{money(month.amount)}</td>
+              <tr key={month.key} className="hover:bg-ink-50">
+                <td className="whitespace-nowrap font-semibold text-ink-800">{month.label}</td>
+                <td className="text-right text-ink-600">{month.days}</td>
+                <td className="text-right font-mono">{litres(month.morningLitres)}</td>
+                <td className="text-right font-mono">{litres(month.eveningLitres)}</td>
+                <td className="text-right font-mono font-semibold">{litres(month.totalLitres)}</td>
+                <td className="text-right font-mono">{month.totalLitres ? `${(month.weightedFat / month.totalLitres).toFixed(2)}%` : '—'}</td>
+                <td className="text-right font-mono">{month.totalLitres ? money(month.amount / month.totalLitres) : '—'}</td>
+                <td className="text-right font-mono font-semibold text-forest-800">{money(month.amount)}</td>
               </tr>
             )) : (
-              <tr><td colSpan={8} className="px-4 py-12 text-center text-slate-400">No collection data available yet.</td></tr>
+              <tr><td colSpan={8} className="py-12 text-center text-ink-400">No collection data yet.</td></tr>
             )}
           </tbody>
-          {months.length > 0 && <tfoot className="border-t-2 border-slate-200 bg-slate-50 font-bold text-slate-800">
+          {months.length > 0 && <tfoot className="border-t border-ink-200 bg-ink-50 font-semibold text-ink-800">
             <tr>
-              <td className="px-4 py-3">All Months</td>
-              <td className="px-4 py-3 text-right">{totals.days}</td>
-              <td className="px-4 py-3 text-right">{litres(totals.morningLitres)}</td>
-              <td className="px-4 py-3 text-right">{litres(totals.eveningLitres)}</td>
-              <td className="px-4 py-3 text-right">{litres(totals.totalLitres)}</td>
-              <td className="px-4 py-3 text-right">{totals.totalLitres ? `${(totals.weightedFat / totals.totalLitres).toFixed(2)}%` : '—'}</td>
-              <td className="px-4 py-3 text-right">{totals.totalLitres ? money(totals.amount / totals.totalLitres) : '—'}</td>
-              <td className="px-4 py-3 text-right text-emerald-700">{money(totals.amount)}</td>
+              <td>All months</td>
+              <td className="text-right">{totals.days}</td>
+              <td className="text-right font-mono">{litres(totals.morningLitres)}</td>
+              <td className="text-right font-mono">{litres(totals.eveningLitres)}</td>
+              <td className="text-right font-mono">{litres(totals.totalLitres)}</td>
+              <td className="text-right font-mono">{totals.totalLitres ? `${(totals.weightedFat / totals.totalLitres).toFixed(2)}%` : '—'}</td>
+              <td className="text-right font-mono">{totals.totalLitres ? money(totals.amount / totals.totalLitres) : '—'}</td>
+              <td className="text-right font-mono text-forest-800">{money(totals.amount)}</td>
             </tr>
           </tfoot>}
         </table>

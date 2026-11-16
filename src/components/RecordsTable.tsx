@@ -112,204 +112,137 @@ export const RecordsTable: React.FC<RecordsTableProps> = ({ onSelectDateForEdit 
   };
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
-      {/* Controls & Filter Bar */}
-      <div className="p-4 sm:p-5 border-b border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-4">
+    <div className="panel">
+      <div className="flex flex-col justify-between gap-4 border-b border-ink-100 p-4 sm:p-5 md:flex-row md:items-center">
         <div>
-          <h3 className="font-bold text-slate-900 text-sm tracking-tight flex items-center gap-2">
-            <span>Date-Wise Milk Collection History</span>
-            <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">
-              {filteredRecords.length} Days
+          <h3 className="flex items-center gap-2 text-sm font-semibold text-ink-900">
+            <span>Collection history</span>
+            <span className="rounded-full bg-ink-100 px-2 py-0.5 text-xs font-medium text-ink-500">
+              {filteredRecords.length} days
             </span>
           </h3>
-          <p className="text-xs text-slate-500">
-            View, edit, filter, and export past Morning and Evening milk records.
-          </p>
+          <p className="text-xs text-ink-400">Filter by date, then edit or export.</p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2.5">
-          {/* Search Date Input */}
+        <div className="flex flex-wrap items-center gap-2">
           <div className="relative">
-            <Search className="h-3.5 w-3.5 absolute left-3 top-3 text-slate-400" />
+            <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-ink-400" />
             <input
               type="text"
-              placeholder="Filter by date (YYYY-MM)..."
+              placeholder="YYYY-MM"
               value={searchDate}
               onChange={(e) => setSearchDate(e.target.value)}
-              className="pl-8 pr-3 py-1.5 text-xs font-medium rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 w-48 sm:w-56"
+              className="w-40 rounded-lg border border-ink-200 bg-white py-1.5 pl-8 pr-3 text-xs font-medium outline-none focus:border-forest-600 focus:ring-2 focus:ring-forest-600/15 sm:w-48"
             />
           </div>
 
-          {/* Session Filter */}
           <select
             value={filterSession}
             onChange={(e) => setFilterSession(e.target.value as any)}
-            className="text-xs font-semibold px-3 py-1.5 rounded-xl border border-slate-200 bg-slate-50 text-slate-700 outline-none cursor-pointer"
+            className="rounded-lg border border-ink-200 bg-white px-3 py-1.5 text-xs font-semibold text-ink-700 outline-none"
           >
-            <option value="all">All Sessions</option>
+            <option value="all">All sessions</option>
             <option value="both">Both AM & PM</option>
-            <option value="morning_only">Morning Only</option>
-            <option value="evening_only">Evening Only</option>
+            <option value="morning_only">Morning only</option>
+            <option value="evening_only">Evening only</option>
           </select>
 
-          {/* Sort Order Toggle */}
           <button
             onClick={() => setSortOrder(prev => prev === 'desc' ? 'asc' : 'desc')}
-            className="flex items-center gap-1 text-xs font-semibold px-3 py-1.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700 transition-colors"
-            title="Toggle Date Sort Order"
+            className="btn-secondary py-1.5 text-xs"
+            title="Toggle date sort order"
           >
-            <ArrowUpDown className="h-3.5 w-3.5 text-slate-500" />
+            <ArrowUpDown className="h-3.5 w-3.5 text-ink-500" />
             <span>{sortOrder === 'desc' ? 'Newest' : 'Oldest'}</span>
           </button>
 
-          {/* Export CSV Button */}
-          <button
-            onClick={handleExportCSV}
-            className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 shadow-2xs transition-colors"
-          >
-            <Download className="h-3.5 w-3.5 text-slate-500" />
-            <span>Export CSV</span>
+          <button onClick={handleExportCSV} className="btn-secondary py-1.5 text-xs">
+            <Download className="h-3.5 w-3.5 text-ink-500" />
+            <span>Export</span>
           </button>
         </div>
       </div>
 
       {/* Main Table */}
       <div className="overflow-x-auto">
-        <table className="w-full text-left text-xs">
-          <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 font-semibold uppercase tracking-wider text-[11px]">
+        <table className="data-table min-w-[920px] text-xs">
+          <thead>
             <tr>
-              <th className="py-3 px-4">Date</th>
-              <th className="py-3 px-4 text-amber-900 bg-amber-50/50">Morning (AM)</th>
-              <th className="py-3 px-4 text-amber-900 bg-amber-50/50">Morning Rate</th>
-              <th className="py-3 px-4 text-amber-900 bg-amber-50/50 text-right">Morning Amt</th>
-              <th className="py-3 px-4 text-blue-900 bg-blue-50/50">Evening (PM)</th>
-              <th className="py-3 px-4 text-blue-900 bg-blue-50/50">Evening Rate</th>
-              <th className="py-3 px-4 text-blue-900 bg-blue-50/50 text-right">Evening Amt</th>
-              <th className="py-3 px-4 text-right">Total Litres</th>
-              <th className="py-3 px-4 text-right font-bold text-emerald-800">Daily Total</th>
-              <th className="py-3 px-4 text-center">Actions</th>
+              <th>Date</th>
+              <th>Morning</th>
+              <th>AM rate</th>
+              <th className="text-right">AM amount</th>
+              <th>Evening</th>
+              <th>PM rate</th>
+              <th className="text-right">PM amount</th>
+              <th className="text-right">Total L</th>
+              <th className="text-right">Day total</th>
+              <th className="text-center">Actions</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-100">
+          <tbody>
             {filteredRecords.length === 0 ? (
               <tr>
-                <td colSpan={10} className="py-8 text-center text-slate-400">
-                  <Layers className="h-6 w-6 mx-auto mb-1 opacity-50" />
-                  No matching records found.
+                <td colSpan={10} className="py-10 text-center text-ink-400">
+                  <Layers className="mx-auto mb-1 h-6 w-6 opacity-50" />
+                  No matching records.
                 </td>
               </tr>
             ) : (
               filteredRecords.map((r) => (
-                <tr key={r.date} className="hover:bg-slate-50/80 transition-colors">
-
-                  {/* Date Column */}
-                  <td className="py-3 px-4 font-bold text-slate-900 whitespace-nowrap">
-                    {r.date}
-                  </td>
-
-                  {/* Morning Data */}
-                  <td className="py-3 px-4 bg-amber-50/20 whitespace-nowrap">
+                <tr key={r.date} className="hover:bg-ink-50/70">
+                  <td className="whitespace-nowrap font-semibold text-ink-900">{r.date}</td>
+                  <td className="whitespace-nowrap">
                     {r.morning ? (
                       <div>
-                        <span className="font-bold text-slate-900">{r.morning.quantity} L</span>
-                        <span className="text-[10px] text-slate-500 block">
-                          Fat: {r.morning.fat}% | CLR: {r.morning.clr}
-                        </span>
+                        <span className="font-semibold text-ink-900">{r.morning.quantity} L</span>
+                        <span className="block text-[10px] text-ink-400">Fat {r.morning.fat}% · CLR {r.morning.clr}</span>
                       </div>
-                    ) : (
-                      <span className="text-slate-400 italic">--</span>
-                    )}
+                    ) : '—'}
                   </td>
-
-                  {/* Morning Rate */}
-                  <td className="py-3 px-4 bg-amber-50/20 whitespace-nowrap">
-                    {r.morning ? (
-                      <span className="font-semibold text-amber-800">
-                        ₹{r.morning.rate_per_liter.toFixed(2)}
-                      </span>
-                    ) : (
-                      <span className="text-slate-400">--</span>
-                    )}
-                  </td>
-
-                  {/* Morning Amount */}
-                  <td className="py-3 px-4 bg-amber-50/20 text-right font-bold text-amber-900 whitespace-nowrap">
-                    {r.morning ? `₹${r.morning.amount.toLocaleString('en-IN')}` : '--'}
-                  </td>
-
-                  {/* Evening Data */}
-                  <td className="py-3 px-4 bg-blue-50/20 whitespace-nowrap">
+                  <td className="whitespace-nowrap font-mono">{r.morning ? `₹${r.morning.rate_per_liter.toFixed(2)}` : '—'}</td>
+                  <td className="whitespace-nowrap text-right font-mono">{r.morning ? `₹${r.morning.amount.toLocaleString('en-IN')}` : '—'}</td>
+                  <td className="whitespace-nowrap">
                     {r.evening ? (
                       <div>
-                        <span className="font-bold text-slate-900">{r.evening.quantity} L</span>
-                        <span className="text-[10px] text-slate-500 block">
-                          Fat: {r.evening.fat}% | CLR: {r.evening.clr}
-                        </span>
+                        <span className="font-semibold text-ink-900">{r.evening.quantity} L</span>
+                        <span className="block text-[10px] text-ink-400">Fat {r.evening.fat}% · CLR {r.evening.clr}</span>
                       </div>
-                    ) : (
-                      <span className="text-slate-400 italic">--</span>
-                    )}
+                    ) : '—'}
                   </td>
-
-                  {/* Evening Rate */}
-                  <td className="py-3 px-4 bg-blue-50/20 whitespace-nowrap">
-                    {r.evening ? (
-                      <span className="font-semibold text-blue-800">
-                        ₹{r.evening.rate_per_liter.toFixed(2)}
-                      </span>
-                    ) : (
-                      <span className="text-slate-400">--</span>
-                    )}
-                  </td>
-
-                  {/* Evening Amount */}
-                  <td className="py-3 px-4 bg-blue-50/20 text-right font-bold text-blue-900 whitespace-nowrap">
-                    {r.evening ? `₹${r.evening.amount.toLocaleString('en-IN')}` : '--'}
-                  </td>
-
-                  {/* Total Litres */}
-                  <td className="py-3 px-4 text-right font-bold text-slate-900 whitespace-nowrap">
-                    {r.totalQuantity} L
-                  </td>
-
-                  {/* Daily Total Amount */}
-                  <td className="py-3 px-4 text-right font-extrabold text-emerald-700 whitespace-nowrap">
-                    ₹{r.totalAmount.toLocaleString('en-IN')}
-                  </td>
-
-                  {/* Edit / Quick Actions */}
-                  <td className="py-3 px-4 text-center whitespace-nowrap">
-                    <div className="flex items-center justify-center gap-1.5">
+                  <td className="whitespace-nowrap font-mono">{r.evening ? `₹${r.evening.rate_per_liter.toFixed(2)}` : '—'}</td>
+                  <td className="whitespace-nowrap text-right font-mono">{r.evening ? `₹${r.evening.amount.toLocaleString('en-IN')}` : '—'}</td>
+                  <td className="whitespace-nowrap text-right font-mono font-semibold">{r.totalQuantity} L</td>
+                  <td className="whitespace-nowrap text-right font-mono font-semibold text-forest-800">₹{r.totalAmount.toLocaleString('en-IN')}</td>
+                  <td className="whitespace-nowrap text-center">
+                    <div className="flex items-center justify-center gap-1">
                       <button
                         onClick={() => onSelectDateForEdit(r.date)}
-                        title="Load date into entry form above"
-                        className="p-1 text-slate-500 hover:text-sky-600 hover:bg-sky-50 rounded transition-colors"
+                        title="Open this date in the collection form"
+                        className="rounded p-1 text-ink-400 hover:bg-ink-50 hover:text-forest-800"
                       >
                         <Edit2 className="h-3.5 w-3.5" />
                       </button>
-
                       {r.morning && (
                         <button
                           onClick={() => handleDeleteSession(r.morning?.id, 'morning', r.date)}
-                          title="Delete Morning Entry"
-                          className="p-1 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded transition-colors"
+                          title="Delete morning entry"
+                          className="rounded p-1 text-ink-400 hover:bg-ink-50 hover:text-ink-800"
                         >
                           <Sun className="h-3.5 w-3.5" />
                         </button>
                       )}
-
                       {r.evening && (
                         <button
                           onClick={() => handleDeleteSession(r.evening?.id, 'evening', r.date)}
-                          title="Delete Evening Entry"
-                          className="p-1 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                          title="Delete evening entry"
+                          className="rounded p-1 text-ink-400 hover:bg-ink-50 hover:text-ink-800"
                         >
                           <Moon className="h-3.5 w-3.5" />
                         </button>
                       )}
                     </div>
                   </td>
-
                 </tr>
               ))
             )}

@@ -42,28 +42,20 @@ export const AnalyticsCharts: React.FC = () => {
   }
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-5 space-y-5">
-      <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-        <div>
-          <h3 className="font-bold text-slate-900 text-sm tracking-tight flex items-center gap-2">
-            <BarChart3 className="h-4 w-4 text-sky-600" />
-            <span>Collection & Revenue Analytics</span>
-          </h3>
-          <p className="text-xs text-slate-500">
-            Trends across the recent collection cycles (Morning vs Evening Litres & Daily Revenue)
-          </p>
-        </div>
+    <div className="panel space-y-5 p-5">
+      <div className="border-b border-ink-100 pb-3">
+        <h3 className="flex items-center gap-2 text-sm font-semibold text-ink-900">
+          <BarChart3 className="h-4 w-4 text-forest-700" />
+          Collection & revenue
+        </h3>
+        <p className="text-xs text-ink-400">Recent morning vs evening litres and daily amount.</p>
       </div>
 
       <div className="grid min-w-0 grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-2">
-
-        {/* Chart 1: Milk Quantity Trend (Morning vs Evening) */}
-        <div className="p-4 rounded-xl border border-slate-100 bg-slate-50/50 space-y-3">
+        <div className="space-y-3 rounded-lg border border-ink-100 bg-ink-50/40 p-4">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-700 uppercase tracking-wide">
-              Milk Litres Trend (Morning vs Evening)
-            </span>
-            <span className="text-[11px] font-semibold text-slate-500">Litres</span>
+            <span className="text-xs font-semibold uppercase tracking-[0.08em] text-ink-600">Litres trend</span>
+            <span className="text-[11px] font-medium text-ink-400">Litres</span>
           </div>
 
           <div className="h-64 w-full">
@@ -117,12 +109,10 @@ export const AnalyticsCharts: React.FC = () => {
         </div>
 
         {/* Chart 2: Daily Amount & Rate Trend */}
-        <div className="p-4 rounded-xl border border-slate-100 bg-slate-50/50 space-y-3">
+        <div className="space-y-3 rounded-lg border border-ink-100 bg-ink-50/40 p-4">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-700 uppercase tracking-wide">
-              Daily Total Amount (₹)
-            </span>
-            <span className="text-[11px] font-semibold text-slate-500">Rupees</span>
+            <span className="text-xs font-semibold uppercase tracking-[0.08em] text-ink-600">Daily amount</span>
+            <span className="text-[11px] font-medium text-ink-400">Rupees</span>
           </div>
 
           <div className="h-64 w-full">
@@ -144,7 +134,7 @@ export const AnalyticsCharts: React.FC = () => {
                 <Bar
                   dataKey="TotalAmount"
                   name="Daily Total Amount (₹)"
-                  fill="#059669"
+                  fill="#18492f"
                   radius={[6, 6, 0, 0]}
                 />
               </BarChart>

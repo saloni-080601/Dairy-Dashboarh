@@ -9,7 +9,7 @@
   }
 
   body {
-    @apply bg-stone-50 text-slate-900 font-sans antialiased;
+    @apply bg-paper text-ink-900 font-sans antialiased;
     min-width: 320px;
     overflow-x: hidden;
   }
@@ -19,7 +19,45 @@
   }
 }
 
-/* Keep dense data readable on phones while allowing tables to scroll locally. */
+@layer components {
+  .panel {
+    @apply overflow-hidden rounded-xl border border-ink-200/80 bg-white shadow-panel;
+  }
+
+  .field-label {
+    @apply mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.12em] text-ink-500;
+  }
+
+  .field-input {
+    @apply w-full rounded-lg border border-ink-200 bg-white px-3 py-2.5 font-mono text-[15px] font-medium text-ink-900 outline-none transition placeholder:text-ink-300 focus:border-forest-600 focus:ring-2 focus:ring-forest-600/15;
+  }
+
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg bg-forest-800 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-forest-900 disabled:cursor-not-allowed disabled:opacity-50;
+  }
+
+  .btn-secondary {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg border border-ink-200 bg-white px-3 py-2 text-sm font-semibold text-ink-700 transition hover:border-ink-300 hover:bg-ink-50;
+  }
+
+  .data-table {
+    @apply w-full text-left text-sm;
+  }
+
+  .data-table thead {
+    @apply bg-ink-50 text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-500;
+  }
+
+  .data-table th,
+  .data-table td {
+    @apply px-3 py-2.5;
+  }
+
+  .data-table tbody tr {
+    @apply border-t border-ink-100;
+  }
+}
+
 @media (max-width: 639px) {
   input, select, textarea {
     max-width: 100%;
@@ -30,23 +68,21 @@
   }
 }
 
-/* Custom scrollbars */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
 ::-webkit-scrollbar-track {
-  background: #f1f5f9;
+  background: #ece9e2;
 }
 ::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
+  background: #b8b0a2;
   border-radius: 4px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
+  background: #8d8578;
 }
 
-/* Print styling for 10-day bills */
 @media print {
   body * {
     visibility: hidden;
