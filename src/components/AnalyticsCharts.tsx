@@ -55,7 +55,7 @@ export const AnalyticsCharts: React.FC = () => {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid min-w-0 grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-2">
 
         {/* Chart 1: Milk Quantity Trend (Morning vs Evening) */}
         <div className="p-4 rounded-xl border border-slate-100 bg-slate-50/50 space-y-3">

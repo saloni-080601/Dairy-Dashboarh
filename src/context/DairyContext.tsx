@@ -101,10 +101,10 @@ export const DairyProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const result = await saveMilkEntry(input, rateSettings);
     if (result.success && result.entry) {
       setEntries(prev => {
-        const filtered = prev.filter(
-          e => !(e.entry_date === input.entry_date && e.session === input.session)
-        );
-        return [result.entry!, ...filtered];
+        if (input.id) {
+          return prev.map(e => (e.id === input.id ? result.entry! : e));
+        }
+        return [result.entry!, ...prev];
       });
       return true;
     }

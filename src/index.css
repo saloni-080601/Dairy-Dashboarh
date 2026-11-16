@@ -3,8 +3,30 @@
 @tailwind utilities;
 
 @layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+    scroll-behavior: smooth;
+  }
+
   body {
-    @apply bg-slate-50 text-slate-900 font-sans antialiased;
+    @apply bg-stone-50 text-slate-900 font-sans antialiased;
+    min-width: 320px;
+    overflow-x: hidden;
+  }
+
+  button, input, select, textarea {
+    font: inherit;
+  }
+}
+
+/* Keep dense data readable on phones while allowing tables to scroll locally. */
+@media (max-width: 639px) {
+  input, select, textarea {
+    max-width: 100%;
+  }
+
+  button {
+    touch-action: manipulation;
   }
 }
 

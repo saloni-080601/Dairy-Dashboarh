@@ -27,13 +27,13 @@ export const StatCard: React.FC<StatCardProps> = ({
 
   return (
     <div className={`p-4 rounded-2xl border shadow-xs transition-all hover:shadow-md ${variantStyles}`}>
-      <div className="flex items-center justify-between">
+      <div className="flex min-w-0 items-center justify-between gap-2">
         <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">{title}</p>
         <div className="p-2 rounded-xl bg-white/80 shadow-2xs backdrop-blur-xs">
           {icon}
         </div>
       </div>
-      <div className="mt-2 flex items-baseline gap-1.5">
+      <div className="mt-2 flex min-w-0 flex-wrap items-baseline gap-1.5">
         <span className="text-2xl font-bold text-slate-900 tracking-tight">{value}</span>
         {unit && <span className="text-xs font-semibold text-slate-500">{unit}</span>}
       </div>

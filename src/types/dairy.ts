@@ -16,11 +16,13 @@ export interface MilkEntry {
   amount: number;
   milk_type?: 'cow' | 'buffalo';
   notes?: string;
+  batch_label?: string;
   created_at?: string;
   updated_at?: string;
 }
 
 export interface MilkEntryInput {
+  id?: string;
   entry_date: string;
   session: MilkSession;
   fat: number;
@@ -28,12 +30,29 @@ export interface MilkEntryInput {
   quantity: number;
   milk_type?: MilkType;
   notes?: string;
+  rate_per_liter?: number;
+  batch_label?: string;
 }
 
 export interface DailyRecord {
   date: string;
+  entries: MilkEntry[];
+  morningEntries: MilkEntry[];
+  eveningEntries: MilkEntry[];
   morning?: MilkEntry;
   evening?: MilkEntry;
+  morningQuantity: number;
+  morningAmount: number;
+  morningAvgRate: number;
+  morningAvgFat: number;
+  morningAvgClr: number;
+  morningAvgSnf: number;
+  eveningQuantity: number;
+  eveningAmount: number;
+  eveningAvgRate: number;
+  eveningAvgFat: number;
+  eveningAvgClr: number;
+  eveningAvgSnf: number;
   totalQuantity: number;
   totalAmount: number;
   avgRate: number;

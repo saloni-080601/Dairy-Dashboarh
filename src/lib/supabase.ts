@@ -175,10 +175,14 @@ export async function saveMilkEntry(
   rateSettings: RateSettings
 ): Promise<{ success: boolean; entry?: MilkEntry; error?: string; isLocal: boolean }> {
   const snf = calculateSNF(input.fat, input.clr);
-  const rate_per_liter = calculateMilkRate(input.fat, input.clr, rateSettings, input.milk_type);
+  // Strictly prioritize exact Rate from rate chart (e.g. 4.0 Fat & 26 CLR = 37.98)
+  const rate_per_liter = (input.rate_per_liter !== undefined && input.rate_per_liter > 0)
+    ? input.rate_per_liter
+    : calculateMilkRate(input.fat, input.clr, rateSettings, input.milk_type);
   const amount = calculateAmount(input.quantity, rate_per_liter);
 
-  const entryPayload: Omit<MilkEntry, 'id'> = {
+  const entryPayload: Omit<MilkEntry, 'id'> & { id?: string } = {
+    ...(input.id ? { id: input.id } : {}),
     entry_date: input.entry_date,
     session: input.session,
     fat: input.fat,
@@ -189,6 +193,7 @@ export async function saveMilkEntry(
     amount,
     milk_type: input.milk_type === 'auto' || !input.milk_type ? (input.fat >= 6.5 ? 'buffalo' : 'cow') : input.milk_type,
     notes: input.notes || '',
+    batch_label: input.batch_label || '',
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
   };
@@ -197,39 +202,38 @@ export async function saveMilkEntry(
 
   if (client) {
     try {
-      let { data, error } = await client
-        .from('milk_entries')
-        .upsert(
-          [entryPayload],
-          { onConflict: 'entry_date,session' }
-        )
-        .select()
-        .single();
-
-      // If Supabase table does not yet have the milk_type column, retry without milk_type
-      if (error && (error.message?.includes('milk_type') || error.code === '42703' || error.code === 'PGRST204' || error.code === '400' || error.message?.includes('column'))) {
-        const { milk_type, ...payloadWithoutMilkType } = entryPayload;
-        const retry = await client
+      if (input.id) {
+        // Update specific existing batch
+        const { data, error } = await client
           .from('milk_entries')
-          .upsert(
-            [payloadWithoutMilkType],
-            { onConflict: 'entry_date,session' }
-          )
+          .update(entryPayload)
+          .eq('id', input.id)
           .select()
           .single();
 
-        if (!retry.error && retry.data) {
-          return { success: true, entry: { ...retry.data, milk_type: entryPayload.milk_type } as MilkEntry, isLocal: false };
+        if (!error && data) {
+          return { success: true, entry: data as MilkEntry, isLocal: false };
+        }
+      } else {
+        // Insert new batch dispatch
+        const { id, ...insertPayload } = entryPayload;
+        let { data, error } = await client
+          .from('milk_entries')
+          .insert([insertPayload])
+          .select()
+          .single();
+
+        // If insert failed due to column missing or legacy unique constraint, try local or fallback
+        if (!error && data) {
+          return { success: true, entry: data as MilkEntry, isLocal: false };
+        }
+
+        if (error) {
+          console.warn('Supabase insert failed, saving locally:', error.message);
+          const local = saveLocalEntry(entryPayload);
+          return { success: true, entry: local, isLocal: true, error: error.message };
         }
       }
-
-      if (error) {
-        console.warn('Supabase insert failed, saving locally:', error.message);
-        const local = saveLocalEntry(entryPayload);
-        return { success: true, entry: local, isLocal: true, error: error.message };
-      }
-
-      return { success: true, entry: data as MilkEntry, isLocal: false };
     } catch (err: unknown) {
       const errMsg = err instanceof Error ? err.message : String(err);
       console.warn('Supabase exception, saving locally:', errMsg);
@@ -277,7 +281,11 @@ export async function fetchRateSettings(): Promise<RateSettings> {
         .maybeSingle();
 
       if (!error && data) {
-        return data as RateSettings;
+        return {
+          ...DEFAULT_RATE_SETTINGS,
+          ...(data as RateSettings),
+          formula_mode: (data as RateSettings).formula_mode || 'chart',
+        };
       }
     } catch {
       // fallback to local
@@ -322,24 +330,31 @@ function getLocalEntries(): MilkEntry[] {
   }
 }
 
-function saveLocalEntry(entry: Omit<MilkEntry, 'id'>): MilkEntry {
+function saveLocalEntry(entry: Omit<MilkEntry, 'id'> & { id?: string }): MilkEntry {
   const entries = getLocalEntries();
-  const existingIdx = entries.findIndex(
-    e => e.entry_date === entry.entry_date && e.session === entry.session
-  );
+  if (entry.id) {
+    const existingIdx = entries.findIndex(e => e.id === entry.id);
+    if (existingIdx >= 0) {
+      const updated: MilkEntry = {
+        ...entries[existingIdx],
+        ...entry,
+        id: entry.id,
+        updated_at: new Date().toISOString(),
+      };
+      entries[existingIdx] = updated;
+      localStorage.setItem(STORAGE_KEY_ENTRIES, JSON.stringify(entries));
+      return updated;
+    }
+  }
 
   const newEntry: MilkEntry = {
     ...entry,
-    id: existingIdx >= 0 ? entries[existingIdx].id : `entry-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+    id: entry.id || `entry-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+    created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
   };
 
-  if (existingIdx >= 0) {
-    entries[existingIdx] = newEntry;
-  } else {
-    entries.unshift(newEntry);
-  }
-
+  entries.unshift(newEntry);
   localStorage.setItem(STORAGE_KEY_ENTRIES, JSON.stringify(entries));
   return newEntry;
 }
@@ -357,7 +372,8 @@ function getLocalRateSettings(): RateSettings {
     return DEFAULT_RATE_SETTINGS;
   }
   try {
-    return { ...DEFAULT_RATE_SETTINGS, ...JSON.parse(stored) };
+    const parsed = JSON.parse(stored);
+    return { ...DEFAULT_RATE_SETTINGS, ...parsed, formula_mode: parsed.formula_mode || 'chart' };
   } catch {
     return DEFAULT_RATE_SETTINGS;
   }

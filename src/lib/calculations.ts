@@ -37,41 +37,29 @@ export function calculateMilkRate(
 ): number {
   if (fat <= 0 || clr <= 0) return 0;
 
-  let rate = 0;
+  // By default and as required, Rate is compared against the Rate Chart (e.g. 4.0 Fat & 26 CLR = 37.98)
+  const chartResult = lookupRateFromChart(fat, clr, milkType);
 
-  switch (settings.formula_mode as FormulaMode) {
-    case 'chart': {
-      // Look up directly from user's exact GAAY & BHAINS Rate Chart
-      const chartResult = lookupRateFromChart(fat, clr, milkType);
-      rate = chartResult.rate;
-      break;
-    }
-
-    case 'fat_snf': {
-      const snf = calculateSNF(fat, clr);
-      rate = (fat * settings.base_fat_rate) + (snf * settings.base_snf_rate);
-      break;
-    }
-
-    case 'fat_only': {
-      rate = settings.standard_rate * (fat / (settings.standard_fat || 4.0));
-      break;
-    }
-
-    case 'base_differential': {
-      const fatDiff = (fat - (settings.standard_fat || 4.0)) * 3.5;
-      const clrDiff = (clr - (settings.standard_clr || 28.0)) * 0.4;
-      rate = settings.standard_rate + fatDiff + clrDiff;
-      break;
-    }
-
-    default: {
-      const chartResult = lookupRateFromChart(fat, clr, milkType);
-      rate = chartResult.rate;
-    }
+  // If a specific alternate mathematical mode was intentionally requested, use it
+  if (settings.formula_mode === 'fat_snf') {
+    const snf = calculateSNF(fat, clr);
+    const rate = (fat * settings.base_fat_rate) + (snf * settings.base_snf_rate);
+    return Number(Math.max(settings.min_rate || 0, rate).toFixed(2));
   }
 
-  // Apply floor minimum rate if configured
+  if (settings.formula_mode === 'fat_only') {
+    const rate = settings.standard_rate * (fat / (settings.standard_fat || 4.0));
+    return Number(Math.max(settings.min_rate || 0, rate).toFixed(2));
+  }
+
+  if (settings.formula_mode === 'base_differential') {
+    const fatDiff = (fat - (settings.standard_fat || 4.0)) * 3.5;
+    const clrDiff = (clr - (settings.standard_clr || 28.0)) * 0.4;
+    const rate = settings.standard_rate + fatDiff + clrDiff;
+    return Number(Math.max(settings.min_rate || 0, rate).toFixed(2));
+  }
+
+  let rate = chartResult.rate;
   if (settings.min_rate && rate < settings.min_rate) {
     rate = settings.min_rate;
   }
@@ -89,70 +77,110 @@ export function calculateAmount(quantity: number, ratePerLiter: number): number 
 
 /**
  * Group raw MilkEntry items into date-wise DailyRecord objects
+ * Supports multiple dispatches/entries per day (e.g. morning 2-3 batches, evening batches)
  */
 export function groupEntriesByDate(entries: MilkEntry[]): DailyRecord[] {
-  const map = new Map<string, { morning?: MilkEntry; evening?: MilkEntry }>();
+  const map = new Map<string, MilkEntry[]>();
 
   for (const entry of entries) {
     const date = entry.entry_date;
     if (!map.has(date)) {
-      map.set(date, {});
+      map.set(date, []);
     }
-    const current = map.get(date)!;
-    if (entry.session === 'morning') {
-      current.morning = entry;
-    } else {
-      current.evening = entry;
-    }
+    const normalizedEntry: MilkEntry = {
+      ...entry,
+      fat: Number(entry.fat) || 0,
+      clr: Number(entry.clr) || 0,
+      snf: Number(entry.snf) || 0,
+      quantity: Number(entry.quantity) || 0,
+      rate_per_liter: Number(entry.rate_per_liter) || 0,
+      amount: Number(entry.amount) || 0,
+    };
+    map.get(date)!.push(normalizedEntry);
   }
 
   const records: DailyRecord[] = [];
 
-  for (const [date, sessions] of map.entries()) {
-    const morning = sessions.morning;
-    const evening = sessions.evening;
+  for (const [date, dateEntries] of map.entries()) {
+    const morningEntries = dateEntries.filter(e => e.session === 'morning');
+    const eveningEntries = dateEntries.filter(e => e.session === 'evening');
 
-    const mQty = morning ? morning.quantity : 0;
-    const eQty = evening ? evening.quantity : 0;
+    const mQty = morningEntries.reduce((sum, e) => sum + e.quantity, 0);
+    const mAmount = morningEntries.reduce((sum, e) => sum + e.amount, 0);
+    const mAvgRate = mQty > 0 ? Number((mAmount / mQty).toFixed(2)) : 0;
+    const mAvgFat = mQty > 0 ? Number((morningEntries.reduce((sum, e) => sum + e.fat * e.quantity, 0) / mQty).toFixed(2)) : 0;
+    const mAvgClr = mQty > 0 ? Number((morningEntries.reduce((sum, e) => sum + e.clr * e.quantity, 0) / mQty).toFixed(2)) : 0;
+    const mAvgSnf = mQty > 0 ? Number((morningEntries.reduce((sum, e) => sum + e.snf * e.quantity, 0) / mQty).toFixed(2)) : 0;
+
+    const eQty = eveningEntries.reduce((sum, e) => sum + e.quantity, 0);
+    const eAmount = eveningEntries.reduce((sum, e) => sum + e.amount, 0);
+    const eAvgRate = eQty > 0 ? Number((eAmount / eQty).toFixed(2)) : 0;
+    const eAvgFat = eQty > 0 ? Number((eveningEntries.reduce((sum, e) => sum + e.fat * e.quantity, 0) / eQty).toFixed(2)) : 0;
+    const eAvgClr = eQty > 0 ? Number((eveningEntries.reduce((sum, e) => sum + e.clr * e.quantity, 0) / eQty).toFixed(2)) : 0;
+    const eAvgSnf = eQty > 0 ? Number((eveningEntries.reduce((sum, e) => sum + e.snf * e.quantity, 0) / eQty).toFixed(2)) : 0;
+
     const totalQuantity = Number((mQty + eQty).toFixed(2));
-
-    const mAmount = morning ? morning.amount : 0;
-    const eAmount = evening ? evening.amount : 0;
     const totalAmount = Number((mAmount + eAmount).toFixed(2));
-
     const avgRate = totalQuantity > 0 ? Number((totalAmount / totalQuantity).toFixed(2)) : 0;
 
-    // Weighted averages for Fat, CLR, SNF
-    let weightedFat = 0;
-    let weightedClr = 0;
-    let weightedSnf = 0;
+    const avgFat = totalQuantity > 0 ? Number((dateEntries.reduce((sum, e) => sum + e.fat * e.quantity, 0) / totalQuantity).toFixed(2)) : 0;
+    const avgClr = totalQuantity > 0 ? Number((dateEntries.reduce((sum, e) => sum + e.clr * e.quantity, 0) / totalQuantity).toFixed(2)) : 0;
+    const avgSnf = totalQuantity > 0 ? Number((dateEntries.reduce((sum, e) => sum + e.snf * e.quantity, 0) / totalQuantity).toFixed(2)) : 0;
 
-    if (totalQuantity > 0) {
-      if (morning) {
-        weightedFat += morning.fat * morning.quantity;
-        weightedClr += morning.clr * morning.quantity;
-        weightedSnf += morning.snf * morning.quantity;
-      }
-      if (evening) {
-        weightedFat += evening.fat * evening.quantity;
-        weightedClr += evening.clr * evening.quantity;
-        weightedSnf += evening.snf * evening.quantity;
-      }
-      weightedFat = Number((weightedFat / totalQuantity).toFixed(2));
-      weightedClr = Number((weightedClr / totalQuantity).toFixed(2));
-      weightedSnf = Number((weightedSnf / totalQuantity).toFixed(2));
-    }
+    // Backward-compatibility summary objects for components reading morning/evening single object
+    const morning: MilkEntry | undefined = morningEntries.length > 0 ? {
+      id: morningEntries[0].id,
+      entry_date: date,
+      session: 'morning',
+      quantity: Number(mQty.toFixed(2)),
+      amount: Number(mAmount.toFixed(2)),
+      rate_per_liter: mAvgRate,
+      fat: mAvgFat,
+      clr: mAvgClr,
+      snf: mAvgSnf,
+      milk_type: morningEntries[0].milk_type,
+      notes: morningEntries.map(e => e.notes).filter(Boolean).join(', ')
+    } : undefined;
+
+    const evening: MilkEntry | undefined = eveningEntries.length > 0 ? {
+      id: eveningEntries[0].id,
+      entry_date: date,
+      session: 'evening',
+      quantity: Number(eQty.toFixed(2)),
+      amount: Number(eAmount.toFixed(2)),
+      rate_per_liter: eAvgRate,
+      fat: eAvgFat,
+      clr: eAvgClr,
+      snf: eAvgSnf,
+      milk_type: eveningEntries[0].milk_type,
+      notes: eveningEntries.map(e => e.notes).filter(Boolean).join(', ')
+    } : undefined;
 
     records.push({
       date,
+      entries: dateEntries,
+      morningEntries,
+      eveningEntries,
       morning,
       evening,
+      morningQuantity: Number(mQty.toFixed(2)),
+      morningAmount: Number(mAmount.toFixed(2)),
+      morningAvgRate: mAvgRate,
+      morningAvgFat: mAvgFat,
+      morningAvgClr: mAvgClr,
+      morningAvgSnf: mAvgSnf,
+      eveningQuantity: Number(eQty.toFixed(2)),
+      eveningAmount: Number(eAmount.toFixed(2)),
+      eveningAvgRate: eAvgRate,
+      eveningAvgFat: eAvgFat,
+      eveningAvgClr: eAvgClr,
+      eveningAvgSnf: eAvgSnf,
       totalQuantity,
       totalAmount,
       avgRate,
-      avgFat: weightedFat,
-      avgClr: weightedClr,
-      avgSnf: weightedSnf,
+      avgFat,
+      avgClr,
+      avgSnf,
     });
   }
 
@@ -237,7 +265,7 @@ export function calculateTenDayPeriods(dailyRecords: DailyRecord[]): TenDayPerio
   return periods.sort((a, b) => b.startDate.localeCompare(a.startDate));
 }
 
-function buildPeriodObject(
+export function buildPeriodObject(
   id: string,
   periodLabel: string,
   cycleNumber: 1 | 2 | 3,
@@ -255,7 +283,16 @@ function buildPeriodObject(
   let totalSnfSum = 0;
 
   for (const r of records) {
-    if (r.morning) {
+    if (r.morningEntries && r.morningEntries.length > 0) {
+      entriesCount += r.morningEntries.length;
+      mQty += r.morningQuantity;
+      mAmount += r.morningAmount;
+      for (const e of r.morningEntries) {
+        totalFatSum += e.fat * e.quantity;
+        totalClrSum += e.clr * e.quantity;
+        totalSnfSum += e.snf * e.quantity;
+      }
+    } else if (r.morning) {
       entriesCount++;
       mQty += r.morning.quantity;
       mAmount += r.morning.amount;
@@ -263,7 +300,17 @@ function buildPeriodObject(
       totalClrSum += r.morning.clr * r.morning.quantity;
       totalSnfSum += r.morning.snf * r.morning.quantity;
     }
-    if (r.evening) {
+
+    if (r.eveningEntries && r.eveningEntries.length > 0) {
+      entriesCount += r.eveningEntries.length;
+      eQty += r.eveningQuantity;
+      eAmount += r.eveningAmount;
+      for (const e of r.eveningEntries) {
+        totalFatSum += e.fat * e.quantity;
+        totalClrSum += e.clr * e.quantity;
+        totalSnfSum += e.snf * e.quantity;
+      }
+    } else if (r.evening) {
       entriesCount++;
       eQty += r.evening.quantity;
       eAmount += r.evening.amount;
@@ -306,17 +353,52 @@ function buildPeriodObject(
  * Calculates rolling last 10 days period
  */
 export function calculateRollingTenDays(dailyRecords: DailyRecord[]): TenDayPeriod | null {
+  return calculateCustomDaysPeriod(dailyRecords, 10, 'Recent 10 Days');
+}
+
+/**
+ * Calculates custom N days period (e.g. 10 days, 15 days, 30 days, 50 days)
+ */
+export function calculateCustomDaysPeriod(
+  dailyRecords: DailyRecord[],
+  daysCount: number,
+  customLabel?: string
+): TenDayPeriod | null {
   if (dailyRecords.length === 0) return null;
-  const lastTen = dailyRecords.slice(0, 10);
-  const startDate = lastTen[lastTen.length - 1].date;
-  const endDate = lastTen[0].date;
+  const sliced = dailyRecords.slice(0, daysCount);
+  if (sliced.length === 0) return null;
+  const startDate = sliced[sliced.length - 1].date;
+  const endDate = sliced[0].date;
 
   return buildPeriodObject(
-    'rolling-10-days',
-    `Recent 10 Days (${startDate} to ${endDate})`,
+    `period-${daysCount}-days`,
+    customLabel || `Recent ${daysCount} Days (${startDate} to ${endDate})`,
     1,
     startDate,
     endDate,
-    lastTen
+    sliced
+  );
+}
+
+/**
+ * Calculates period for arbitrary date range
+ */
+export function calculateDateRangePeriod(
+  dailyRecords: DailyRecord[],
+  startDate: string,
+  endDate: string,
+  label?: string
+): TenDayPeriod | null {
+  if (dailyRecords.length === 0) return null;
+  const filtered = dailyRecords.filter(r => r.date >= startDate && r.date <= endDate);
+  if (filtered.length === 0) return null;
+
+  return buildPeriodObject(
+    `range-${startDate}-${endDate}`,
+    label || `Date Range (${startDate} to ${endDate})`,
+    1,
+    startDate,
+    endDate,
+    filtered
   );
 }

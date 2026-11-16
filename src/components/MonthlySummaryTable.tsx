@@ -59,7 +59,7 @@ export const MonthlySummaryTable: React.FC = () => {
 
   return (
     <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm" aria-labelledby="monthly-summary-heading">
-      <div className="flex items-center gap-3 border-b border-slate-200 px-5 py-4">
+      <div className="flex items-center gap-3 border-b border-slate-200 px-4 py-4 sm:px-5">
         <div className="rounded-xl bg-violet-50 p-2 text-violet-700"><CalendarRange className="h-5 w-5" /></div>
         <div>
           <h2 id="monthly-summary-heading" className="text-sm font-bold text-slate-900">Monthly Collection Summary</h2>

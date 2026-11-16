@@ -15,21 +15,22 @@ CREATE TABLE IF NOT EXISTS public.milk_entries (
     rate_per_liter NUMERIC(8, 2) NOT NULL CHECK (rate_per_liter >= 0),
     amount NUMERIC(10, 2) NOT NULL CHECK (amount >= 0),
     milk_type VARCHAR(20) DEFAULT 'cow',
+    batch_label VARCHAR(100),
     notes TEXT,
     created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL,
-    updated_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL,
-    -- Prevent duplicate entries for the same date and session
-    CONSTRAINT unique_date_session UNIQUE (entry_date, session)
+    updated_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
 );
 
--- Ensure milk_type column exists if table was already created
+-- Ensure multiple entries per day and session are allowed (drop old unique constraint if present)
+ALTER TABLE IF EXISTS public.milk_entries DROP CONSTRAINT IF EXISTS unique_date_session;
 ALTER TABLE IF EXISTS public.milk_entries ADD COLUMN IF NOT EXISTS milk_type VARCHAR(20) DEFAULT 'cow';
+ALTER TABLE IF EXISTS public.milk_entries ADD COLUMN IF NOT EXISTS batch_label VARCHAR(100);
 
 -- 2. Create rate_settings table (stores pricing configuration)
 CREATE TABLE IF NOT EXISTS public.rate_settings (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     setting_name VARCHAR(50) NOT NULL DEFAULT 'default',
-    formula_mode VARCHAR(30) NOT NULL DEFAULT 'fat_snf', -- 'fat_snf', 'fat_only', 'base_differential'
+    formula_mode VARCHAR(30) NOT NULL DEFAULT 'chart', -- 'chart', 'fat_snf', 'fat_only', 'base_differential'
     base_fat_rate NUMERIC(6, 2) NOT NULL DEFAULT 7.50,     -- Rate multiplier per 1% Fat
     base_snf_rate NUMERIC(6, 2) NOT NULL DEFAULT 4.20,     -- Rate multiplier per 1% SNF
     standard_fat NUMERIC(4, 2) NOT NULL DEFAULT 4.0,       -- Reference standard Fat %
