@@ -40,6 +40,8 @@ export const PrintableBillModal: React.FC<PrintableBillModalProps> = ({ period, 
             <button
               onClick={onClose}
               className="p-2 text-slate-400 hover:text-slate-600 rounded-xl hover:bg-slate-200 transition-colors"
+              aria-label="Close bill and go back"
+              title="Close and go back"
             >
               <X className="h-5 w-5" />
             </button>

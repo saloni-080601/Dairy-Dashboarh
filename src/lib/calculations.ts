@@ -11,7 +11,7 @@ export const DEFAULT_RATE_SETTINGS: RateSettings = {
   standard_clr: 28.0,    // 28 CLR reference
   standard_rate: 42.40,  // Base price at 4.0 Fat & 28 CLR
   min_rate: 15.00,       // Minimum floor price
-  dairy_name: 'Gokul Dairy Collection Center',
+  dairy_name: "Piyush's Farm",
   center_code: 'CTR-001',
   farmer_name: 'Kisan Milk Producer',
   phone: '+91 98765 43210'

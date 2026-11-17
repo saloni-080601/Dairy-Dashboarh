@@ -111,7 +111,7 @@ CREATE TABLE IF NOT EXISTS public.rate_settings (
     standard_clr NUMERIC(4, 2) NOT NULL DEFAULT 28.0,
     standard_rate NUMERIC(6, 2) NOT NULL DEFAULT 42.40,
     min_rate NUMERIC(6, 2) NOT NULL DEFAULT 25.00,
-    dairy_name VARCHAR(100) DEFAULT 'Gokul Dairy Collection Center',
+    dairy_name VARCHAR(100) DEFAULT 'Piyush''s Farm',
     center_code VARCHAR(50) DEFAULT 'CTR-001',
     farmer_name VARCHAR(100) DEFAULT 'Kisan Milk Producer',
     phone VARCHAR(20) DEFAULT '+91 98765 43210',

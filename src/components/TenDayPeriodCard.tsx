@@ -1,6 +1,8 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useDairy } from '../context/DairyContext';
 import { TenDayPeriod } from '../types/dairy';
+import { buildPeriodObject } from '../lib/calculations';
+import { format, getDaysInMonth } from 'date-fns';
 import {
   CalendarDays,
   Printer,
@@ -8,8 +10,7 @@ import {
   Droplets,
   Coins,
   Percent,
-  Gauge,
-  Layers
+  Gauge
 } from 'lucide-react';
 
 interface TenDayPeriodCardProps {
@@ -17,29 +18,39 @@ interface TenDayPeriodCardProps {
 }
 
 export const TenDayPeriodCard: React.FC<TenDayPeriodCardProps> = ({ onOpenBillForPeriod }) => {
-  const { tenDayPeriods, rollingTenDays } = useDairy();
+  const { dailyRecords } = useDairy();
+  const now = new Date();
+  const todayCycle: 1 | 2 | 3 = now.getDate() <= 10 ? 1 : now.getDate() <= 20 ? 2 : 3;
+  const [selectedCycle, setSelectedCycle] = useState<1 | 2 | 3>(todayCycle);
 
-  // Combine rolling ten days and cycle periods
-  const allAvailablePeriods: TenDayPeriod[] = [
-    ...(rollingTenDays ? [rollingTenDays] : []),
-    ...tenDayPeriods,
-  ];
+  const currentMonthPeriods = useMemo(() => {
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const monthKey = format(monthStart, 'yyyy-MM');
+    const daysInMonth = getDaysInMonth(monthStart);
+    const monthRecords = dailyRecords.filter(record => record.date.startsWith(monthKey));
 
-  const [selectedPeriodId, setSelectedPeriodId] = useState<string>(
-    allAvailablePeriods[0]?.id || ''
-  );
+    return ([1, 2, 3] as const).map((cycle): TenDayPeriod => {
+      const startDay = cycle === 1 ? 1 : cycle === 2 ? 11 : 21;
+      const endDay = cycle === 1 ? 10 : cycle === 2 ? 20 : daysInMonth;
+      const startDate = `${monthKey}-${String(startDay).padStart(2, '0')}`;
+      const endDate = `${monthKey}-${String(endDay).padStart(2, '0')}`;
+      const records = monthRecords.filter(record => record.date >= startDate && record.date <= endDate);
+      const range = cycle === 1 ? '01 - 10' : cycle === 2 ? '11 - 20' : `21 - ${daysInMonth}`;
 
-  const activePeriod = allAvailablePeriods.find(p => p.id === selectedPeriodId) || allAvailablePeriods[0];
+      return {
+        ...buildPeriodObject(
+          `${monthKey}-c${cycle}`,
+          `Cycle ${cycle}: ${range} ${format(monthStart, 'MMM yyyy')}`,
+          cycle,
+          startDate,
+          endDate,
+          records,
+        ),
+      };
+    });
+  }, [dailyRecords, now]);
 
-  if (!activePeriod) {
-    return (
-      <div className="panel p-8 text-center text-ink-500">
-        <Layers className="mx-auto mb-2 h-8 w-8 text-ink-300" />
-        <p className="text-sm font-semibold">No 10-day records yet.</p>
-        <p className="mt-1 text-xs text-ink-400">Save daily collection to build a billing cycle.</p>
-      </div>
-    );
-  }
+  const activePeriod = currentMonthPeriods.find(period => period.cycleNumber === selectedCycle)!;
 
   return (
     <div className="panel">
@@ -59,12 +70,12 @@ export const TenDayPeriodCard: React.FC<TenDayPeriodCardProps> = ({ onOpenBillFo
         <div className="flex items-center gap-2">
           <div className="relative">
             <select
-              value={activePeriod.id}
-              onChange={(e) => setSelectedPeriodId(e.target.value)}
+              value={activePeriod.cycleNumber}
+              onChange={(e) => setSelectedCycle(Number(e.target.value) as 1 | 2 | 3)}
               className="appearance-none cursor-pointer rounded-lg border border-white/20 bg-white/10 px-3 py-1.5 pr-8 text-xs font-semibold text-white outline-none hover:bg-white/20"
             >
-              {allAvailablePeriods.map(p => (
-                <option key={p.id} value={p.id} className="text-ink-900">
+              {currentMonthPeriods.map(p => (
+                <option key={p.id} value={p.cycleNumber} className="text-ink-900">
                   {p.periodLabel}
                 </option>
               ))}
@@ -74,7 +85,8 @@ export const TenDayPeriodCard: React.FC<TenDayPeriodCardProps> = ({ onOpenBillFo
 
           <button
             onClick={() => onOpenBillForPeriod(activePeriod)}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-white px-3 py-1.5 text-xs font-semibold text-forest-900 hover:bg-forest-50"
+            disabled={activePeriod.daysWithEntries === 0}
+            className="inline-flex items-center gap-1.5 rounded-lg bg-white px-3 py-1.5 text-xs font-semibold text-forest-900 hover:bg-forest-50 disabled:cursor-not-allowed disabled:opacity-50"
             title="Print or view detailed bill slip for this period"
           >
             <Printer className="h-3.5 w-3.5" />
@@ -159,7 +171,11 @@ export const TenDayPeriodCard: React.FC<TenDayPeriodCardProps> = ({ onOpenBillFo
                 </tr>
               </thead>
               <tbody>
-                {activePeriod.records.map((r) => (
+                {activePeriod.records.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="py-8 text-center text-ink-400">No collection records in this billing period yet.</td>
+                  </tr>
+                ) : activePeriod.records.map((r) => (
                   <tr key={r.date} className="hover:bg-ink-50">
                     <td className="font-semibold text-ink-800">{r.date}</td>
                     <td>{r.morning ? `${r.morning.quantity}L @ ₹${r.morning.rate_per_liter}` : '—'}</td>

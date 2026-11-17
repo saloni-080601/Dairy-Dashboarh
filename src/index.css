@@ -56,6 +56,11 @@
   .data-table tbody tr {
     @apply border-t border-ink-100;
   }
+
+  .records-table th,
+  .records-table td {
+    @apply border border-ink-200;
+  }
 }
 
 @media (max-width: 639px) {

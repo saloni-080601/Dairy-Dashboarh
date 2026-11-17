@@ -15,6 +15,7 @@ export const RateSettingsModal: React.FC<RateSettingsModalProps> = ({ onClose })
   const [testFat, setTestFat] = useState<number>(4.2);
   const [testClr, setTestClr] = useState<number>(28.0);
   const [isSaving, setIsSaving] = useState<boolean>(false);
+  const [saveError, setSaveError] = useState<string>('');
 
   const testSnf = calculateSNF(testFat, testClr);
   const testRate = calculateMilkRate(testFat, testClr, formData);
@@ -22,9 +23,14 @@ export const RateSettingsModal: React.FC<RateSettingsModalProps> = ({ onClose })
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSaving(true);
-    await updateSettings(formData);
+    setSaveError('');
+    const success = await updateSettings(formData);
     setIsSaving(false);
-    onClose();
+    if (success) {
+      onClose();
+    } else {
+      setSaveError('Settings save nahi ho paayi. Connection check karke dobara try karein.');
+    }
   };
 
   const handleApplyPreset = (type: 'cow' | 'buffalo') => {
@@ -235,7 +241,7 @@ export const RateSettingsModal: React.FC<RateSettingsModalProps> = ({ onClose })
                   type="text"
                   value={formData.dairy_name}
                   onChange={e => setFormData({ ...formData, dairy_name: e.target.value })}
-                  className="w-full px-3 py-1.5 text-xs font-medium rounded-lg border border-slate-200"
+                  className="w-full px-3 py-1.5 text-xs font-medium rounded-lg border border-slate-200 bg-white text-slate-900 outline-none transition focus:border-orange-400 focus:ring-2 focus:ring-orange-100"
                 />
               </div>
               <div>
@@ -246,7 +252,7 @@ export const RateSettingsModal: React.FC<RateSettingsModalProps> = ({ onClose })
                   type="text"
                   value={formData.center_code}
                   onChange={e => setFormData({ ...formData, center_code: e.target.value })}
-                  className="w-full px-3 py-1.5 text-xs font-medium rounded-lg border border-slate-200"
+                  className="w-full px-3 py-1.5 text-xs font-medium rounded-lg border border-slate-200 bg-white text-slate-900 outline-none transition focus:border-orange-400 focus:ring-2 focus:ring-orange-100"
                 />
               </div>
               <div>
@@ -257,7 +263,7 @@ export const RateSettingsModal: React.FC<RateSettingsModalProps> = ({ onClose })
                   type="text"
                   value={formData.farmer_name}
                   onChange={e => setFormData({ ...formData, farmer_name: e.target.value })}
-                  className="w-full px-3 py-1.5 text-xs font-medium rounded-lg border border-slate-200"
+                  className="w-full px-3 py-1.5 text-xs font-medium rounded-lg border border-slate-200 bg-white text-slate-900 outline-none transition focus:border-orange-400 focus:ring-2 focus:ring-orange-100"
                 />
               </div>
               <div>
@@ -268,7 +274,7 @@ export const RateSettingsModal: React.FC<RateSettingsModalProps> = ({ onClose })
                   type="text"
                   value={formData.phone}
                   onChange={e => setFormData({ ...formData, phone: e.target.value })}
-                  className="w-full px-3 py-1.5 text-xs font-medium rounded-lg border border-slate-200"
+                  className="w-full px-3 py-1.5 text-xs font-medium rounded-lg border border-slate-200 bg-white text-slate-900 outline-none transition focus:border-orange-400 focus:ring-2 focus:ring-orange-100"
                 />
               </div>
             </div>
@@ -292,6 +298,7 @@ export const RateSettingsModal: React.FC<RateSettingsModalProps> = ({ onClose })
               <span>{isSaving ? 'Saving...' : 'Save Settings'}</span>
             </button>
           </div>
+          {saveError && <p className="text-right text-xs font-medium text-red-600" role="alert">{saveError}</p>}
 
         </form>
 

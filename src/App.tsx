@@ -1,18 +1,24 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { format, getDaysInMonth } from 'date-fns';
 import { DairyProvider, useDairy } from './context/DairyContext';
 import { Header } from './components/Header';
 import { StatCard } from './components/StatCard';
 import { DailyEntrySection } from './components/DailyEntrySection';
 import { DailySummaryCard } from './components/DailySummaryCard';
 import { TenDayPeriodCard } from './components/TenDayPeriodCard';
+import { TenDayStatCard, OverviewTenDayGroups } from './components/OverviewTenDayGroups';
 import { RecordsTable } from './components/RecordsTable';
 import { AnalyticsCharts } from './components/AnalyticsCharts';
 import { PrintableBillModal } from './components/PrintableBillModal';
 import { RateSettingsModal } from './components/RateSettingsModal';
 import { SupabaseConfigModal } from './components/SupabaseConfigModal';
 import { RateChartViewerModal } from './components/RateChartViewerModal';
+import { LoginPage } from './components/LoginPage';
+import { CowGroupRecords } from './components/CowGroupRecords';
 import { MonthlySummaryTable } from './components/MonthlySummaryTable';
 import { TenDayPeriod } from './types/dairy';
+import { getSupabaseClient } from './lib/supabase';
+import { buildPeriodObject } from './lib/calculations';
 import {
   Droplets,
   Coins,
@@ -24,6 +30,7 @@ import {
   Home,
   Settings2,
   FileText,
+  Users,
 } from 'lucide-react';
 
 interface RecordsBillingPageProps {
@@ -71,10 +78,65 @@ const RecordsBillingPage: React.FC<RecordsBillingPageProps> = ({
   );
 };
 
-const OverviewPage: React.FC = () => {
-  const { selectedDayRecord, tenDayPeriods, rollingTenDays } = useDairy();
-  const current10DayPeriod = rollingTenDays || tenDayPeriods[0];
+interface OverviewPageProps {
+  onOpenBillForPeriod?: (period: TenDayPeriod) => void;
+}
+
+const OverviewPage: React.FC<OverviewPageProps> = ({ onOpenBillForPeriod }) => {
+  const { selectedDayRecord, dailyRecords, selectedDate } = useDairy();
   const [tab, setTab] = useState<'summary' | 'analytics'>('summary');
+
+  const { monthKey, monthStart, daysInMonth, monthLabel, monthShort, todayCycle } = useMemo(() => {
+    let baseDate = new Date();
+    if (selectedDate && /^\d{4}-\d{2}-\d{2}$/.test(selectedDate)) {
+      const [y, m, d] = selectedDate.split('-').map(Number);
+      baseDate = new Date(y, m - 1, d);
+    }
+    const mKey = format(baseDate, 'yyyy-MM');
+    const mStart = new Date(baseDate.getFullYear(), baseDate.getMonth(), 1);
+    const dInMonth = getDaysInMonth(mStart);
+    const mLabel = format(baseDate, 'MMMM yyyy');
+    const mShort = format(baseDate, 'MMM');
+    const day = baseDate.getDate();
+    const cycle: 1 | 2 | 3 = day <= 10 ? 1 : day <= 20 ? 2 : 3;
+
+    return {
+      monthKey: mKey,
+      monthStart: mStart,
+      daysInMonth: dInMonth,
+      monthLabel: mLabel,
+      monthShort: mShort,
+      todayCycle: cycle,
+    };
+  }, [selectedDate]);
+
+  const [selectedCycle, setSelectedCycle] = useState<1 | 2 | 3>(todayCycle);
+
+  useEffect(() => {
+    setSelectedCycle(todayCycle);
+  }, [todayCycle, monthKey]);
+
+  const currentMonthPeriods = useMemo(() => {
+    const monthRecords = dailyRecords.filter(record => record.date.startsWith(monthKey));
+
+    return ([1, 2, 3] as const).map((cycle): TenDayPeriod => {
+      const startDay = cycle === 1 ? 1 : cycle === 2 ? 11 : 21;
+      const endDay = cycle === 1 ? 10 : cycle === 2 ? 20 : daysInMonth;
+      const startDate = `${monthKey}-${String(startDay).padStart(2, '0')}`;
+      const endDate = `${monthKey}-${String(endDay).padStart(2, '0')}`;
+      const records = monthRecords.filter(record => record.date >= startDate && record.date <= endDate);
+      const range = cycle === 1 ? '01 - 10' : cycle === 2 ? '11 - 20' : `21 - ${daysInMonth}`;
+
+      return buildPeriodObject(
+        `${monthKey}-c${cycle}`,
+        `Cycle ${cycle}: ${range} ${format(monthStart, 'MMM yyyy')}`,
+        cycle,
+        startDate,
+        endDate,
+        records
+      );
+    });
+  }, [dailyRecords, monthKey, monthStart, daysInMonth]);
 
   return (
     <div className="space-y-5">
@@ -98,13 +160,26 @@ const OverviewPage: React.FC = () => {
           subtitle={`Fat ${selectedDayRecord?.avgFat ?? 0}% · CLR ${selectedDayRecord?.avgClr ?? 0}`}
           icon={<Gauge className="h-4 w-4" />}
         />
-        <StatCard
-          title="10-day total"
-          value={current10DayPeriod ? `₹${current10DayPeriod.totalAmount.toLocaleString('en-IN')}` : '₹0'}
-          subtitle={current10DayPeriod ? `${current10DayPeriod.totalQuantity} L · ${current10DayPeriod.periodLabel}` : 'No period data'}
-          icon={<CalendarDays className="h-4 w-4" />}
+        <TenDayStatCard
+          periods={currentMonthPeriods}
+          selectedCycle={selectedCycle}
+          onSelectCycle={setSelectedCycle}
+          daysInMonth={daysInMonth}
+          monthShort={monthShort}
+          activeCycle={todayCycle}
         />
       </div>
+
+      <OverviewTenDayGroups
+        periods={currentMonthPeriods}
+        selectedCycle={selectedCycle}
+        onSelectCycle={setSelectedCycle}
+        daysInMonth={daysInMonth}
+        monthLabel={monthLabel}
+        monthShort={monthShort}
+        activeCycle={todayCycle}
+        onOpenBillForPeriod={onOpenBillForPeriod}
+      />
 
       <div className="flex w-full gap-1 rounded-lg bg-ink-100 p-1 sm:w-auto sm:inline-flex">
         <button
@@ -132,31 +207,95 @@ const OverviewPage: React.FC = () => {
 };
 
 const DashboardContent: React.FC = () => {
-  const { setSelectedDate, tenDayPeriods, rollingTenDays, refreshData } = useDairy();
+  const { setSelectedDate, tenDayPeriods, refreshData } = useDairy();
 
   const [showSettingsModal, setShowSettingsModal] = useState<boolean>(false);
   const [showSupabaseModal, setShowSupabaseModal] = useState<boolean>(false);
   const [showChartModal, setShowChartModal] = useState<boolean>(false);
+  const [authEmail, setAuthEmail] = useState<string | null>(null);
+  const [authReady, setAuthReady] = useState(false);
+  const [authVersion, setAuthVersion] = useState(0);
   const [billPeriod, setBillPeriod] = useState<TenDayPeriod | null>(null);
   const [activeSection, setActiveSection] = useState('daily-entry');
 
-  const current10DayPeriod = rollingTenDays || tenDayPeriods[0];
+  useEffect(() => {
+    let active = true;
+    const client = getSupabaseClient();
+    if (!client) {
+      setAuthEmail(null);
+      setAuthReady(true);
+      return;
+    }
+
+    setAuthReady(false);
+    client.auth.getSession().then(({ data }) => {
+      if (active) {
+        setAuthEmail(data.session?.user.email ?? null);
+        setAuthReady(true);
+      }
+    }).catch(() => {
+      if (active) setAuthReady(true);
+    });
+
+    const { data: { subscription } } = client.auth.onAuthStateChange((_event, session) => {
+      if (active) setAuthEmail(session?.user.email ?? null);
+    });
+
+    return () => {
+      active = false;
+      subscription.unsubscribe();
+    };
+  }, [authVersion]);
+
+  const handleLogout = async () => {
+    const client = getSupabaseClient();
+    if (client) await client.auth.signOut();
+    setAuthEmail(null);
+  };
+
+  const handleSupabaseModalClose = () => {
+    setShowSupabaseModal(false);
+    setAuthVersion(version => version + 1);
+  };
+
+  if (!authReady) {
+    return <div className="flex min-h-screen items-center justify-center text-sm text-slate-500">Loading…</div>;
+  }
+
+  if (!authEmail) {
+    return (
+      <>
+        <LoginPage onLogin={() => setAuthVersion(version => version + 1)} onOpenSupabase={() => setShowSupabaseModal(true)} />
+        {showSupabaseModal && <SupabaseConfigModal onClose={handleSupabaseModalClose} />}
+      </>
+    );
+  }
+
+  const now = new Date();
+  const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  const currentCycle = now.getDate() <= 10 ? 1 : now.getDate() <= 20 ? 2 : 3;
+  const currentBillingPeriod = tenDayPeriods.find(
+    period => period.startDate.startsWith(currentMonthKey) && period.cycleNumber === currentCycle
+  );
 
   const handleOpenBillForPeriod = (period: TenDayPeriod) => setBillPeriod(period);
   const handleOpenDefaultBill = () => {
-    if (current10DayPeriod) setBillPeriod(current10DayPeriod);
+    if (currentBillingPeriod) setBillPeriod(currentBillingPeriod);
   };
 
   const sectionLinks = [
     { id: 'daily-entry', label: 'Daily collection', icon: Droplets },
-    { id: 'overview', label: 'Overview', icon: Home },
+    { id: 'cow-groups', label: 'Cow group data', icon: Users },
     { id: 'records', label: 'Records & billing', icon: BarChart3 },
+    { id: 'overview', label: 'Overview', icon: Home },
+    
   ];
 
   const pageTitles: Record<string, { title: string; subtitle: string }> = {
     'daily-entry': { title: 'Daily collection', subtitle: 'Enter quantity, fat and CLR. Rate is calculated automatically.' },
     overview: { title: 'Overview', subtitle: 'Today’s milk, earnings and quality at a glance.' },
     records: { title: 'Records & billing', subtitle: 'History, 10-day cycles and monthly totals.' },
+    'cow-groups': { title: 'Cow group data', subtitle: 'Group-wise morning and evening milk records.' },
   };
 
   return (
@@ -165,6 +304,8 @@ const DashboardContent: React.FC = () => {
         onOpenSettings={() => setShowSettingsModal(true)}
         onOpenSupabase={() => setShowSupabaseModal(true)}
         onOpenBill={handleOpenDefaultBill}
+        onLogout={handleLogout}
+        userEmail={authEmail}
       />
 
       <main className="mx-auto w-full max-w-[1440px] flex-1 px-3 py-5 sm:px-6 sm:py-7 lg:px-8">
@@ -221,7 +362,9 @@ const DashboardContent: React.FC = () => {
               <p className="mt-0.5 text-sm text-ink-500">{pageTitles[activeSection].subtitle}</p>
             </div>
 
-            {activeSection === 'overview' && <OverviewPage />}
+            {activeSection === 'overview' && (
+              <OverviewPage onOpenBillForPeriod={handleOpenBillForPeriod} />
+            )}
 
             {activeSection === 'daily-entry' && (
               <section aria-labelledby="daily-entry-heading">
@@ -238,6 +381,8 @@ const DashboardContent: React.FC = () => {
                 }}
               />
             )}
+
+            {activeSection === 'cow-groups' && <CowGroupRecords />}
           </div>
         </div>
       </main>
@@ -253,7 +398,7 @@ const DashboardContent: React.FC = () => {
         <RateChartViewerModal onClose={() => setShowChartModal(false)} onSaved={() => refreshData()} />
       )}
       {showSettingsModal && <RateSettingsModal onClose={() => setShowSettingsModal(false)} />}
-      {showSupabaseModal && <SupabaseConfigModal onClose={() => setShowSupabaseModal(false)} />}
+      {showSupabaseModal && <SupabaseConfigModal onClose={handleSupabaseModalClose} />}
       {billPeriod && (
         <PrintableBillModal period={billPeriod} onClose={() => setBillPeriod(null)} />
       )}

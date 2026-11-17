@@ -6,12 +6,16 @@ interface HeaderProps {
   onOpenSettings: () => void;
   onOpenSupabase: () => void;
   onOpenBill: () => void;
+  onLogout: () => void;
+  userEmail: string;
 }
 
 export const Header: React.FC<HeaderProps> = ({
   onOpenSettings,
   onOpenSupabase,
   onOpenBill,
+  onLogout,
+  userEmail,
 }) => {
   const {
     isSupabaseConnected,
@@ -37,6 +41,10 @@ export const Header: React.FC<HeaderProps> = ({
         </div>
 
         <div className="flex shrink-0 items-center gap-1.5">
+          <span className="hidden max-w-36 truncate text-xs text-ink-500 md:block" title={userEmail}>{userEmail}</span>
+          <button onClick={onLogout} className="rounded-lg border border-ink-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-ink-700 hover:bg-ink-50 sm:px-3" title="Logout">
+            Logout
+          </button>
           <button
             onClick={onOpenSupabase}
             className="hidden items-center gap-1.5 rounded-lg border border-ink-200 bg-white px-2.5 py-1.5 text-xs font-medium text-ink-600 hover:bg-ink-50 sm:flex"

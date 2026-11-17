@@ -18,6 +18,86 @@ export type MilkRateCharts = {
   buffalo: Record<number, Record<string, number>>;
 };
 
+export interface CowProfileRecord {
+  id: string;
+  name: string;
+}
+
+export interface CowMilkRecord {
+  id: string;
+  cow_id: string;
+  date: string;
+  session: 'morning' | 'evening';
+  quantity: number;
+}
+
+export async function fetchCowCollection(): Promise<{ cows: CowProfileRecord[]; records: CowMilkRecord[]; error?: string }> {
+  const client = getSupabaseClient();
+  if (!client) return { cows: [], records: [], error: 'Supabase connection is required for cow data.' };
+
+  try {
+    const [cowsResult, recordsResult] = await Promise.all([
+      client.from('cows').select('id, name').order('name'),
+      client.from('cow_milk_records').select('id, cow_id, date, session, quantity').order('date', { ascending: false }),
+    ]);
+    if (cowsResult.error) return { cows: [], records: [], error: cowsResult.error.message };
+    if (recordsResult.error) return { cows: [], records: [], error: recordsResult.error.message };
+
+    return {
+      cows: (cowsResult.data ?? []).map(row => ({ id: String(row.id), name: String(row.name) })),
+      records: (recordsResult.data ?? []).map(row => ({
+        id: String(row.id),
+        cow_id: String(row.cow_id),
+        date: String(row.date),
+        session: row.session as 'morning' | 'evening',
+        quantity: Number(row.quantity),
+      })),
+    };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return { cows: [], records: [], error: message };
+  }
+}
+
+export async function createCowProfile(name: string): Promise<{ cow?: CowProfileRecord; error?: string }> {
+  const client = getSupabaseClient();
+  if (!client) return { error: 'Supabase connection is required to add a cow.' };
+  try {
+    const id = typeof crypto !== 'undefined' && 'randomUUID' in crypto
+      ? crypto.randomUUID()
+      : `cow-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const { data, error } = await client.from('cows')
+      .insert({ id, name: name.trim() })
+      .select('id, name')
+      .single();
+    if (error) return { error: error.message };
+    return { cow: { id: String(data.id), name: String(data.name) } };
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+export async function saveCowMilkRecord(record: Omit<CowMilkRecord, 'id'>): Promise<{ record?: CowMilkRecord; error?: string }> {
+  const client = getSupabaseClient();
+  if (!client) return { error: 'Supabase connection is required to save cow milk.' };
+  try {
+    const id = typeof crypto !== 'undefined' && 'randomUUID' in crypto
+      ? crypto.randomUUID()
+      : `milk-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const { data, error } = await client.from('cow_milk_records')
+      .upsert({ id, ...record }, { onConflict: 'cow_id,date,session' })
+      .select('id, cow_id, date, session, quantity')
+      .single();
+    if (error) return { error: error.message };
+    return { record: {
+      id: String(data.id), cow_id: String(data.cow_id), date: String(data.date),
+      session: data.session as 'morning' | 'evening', quantity: Number(data.quantity),
+    } };
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
 export async function fetchRateCharts(): Promise<{ charts: MilkRateCharts; error?: string }> {
   const client = getSupabaseClient();
   const localCharts = { cow: getStoredCowChart(), buffalo: getStoredBuffaloChart() };
@@ -296,19 +376,25 @@ export async function fetchRateSettings(): Promise<RateSettings> {
 }
 
 export async function saveRateSettings(settings: RateSettings): Promise<{ success: boolean }> {
-  saveLocalRateSettings(settings);
-
   const client = getSupabaseClient();
   if (client) {
     try {
-      await client
-        .from('rate_settings')
-        .upsert([{ ...settings, updated_at: new Date().toISOString() }], { onConflict: 'setting_name' });
+      const payload = { ...settings, updated_at: new Date().toISOString() };
+      const result = settings.id
+        ? await client.from('rate_settings').update(payload).eq('id', settings.id)
+        : await client.from('rate_settings').insert(payload);
+
+      if (result.error) {
+        console.warn('Could not persist settings to Supabase:', result.error.message);
+        return { success: false };
+      }
     } catch (err) {
       console.warn('Could not persist settings to Supabase:', err);
+      return { success: false };
     }
   }
 
+  saveLocalRateSettings(settings);
   return { success: true };
 }
 

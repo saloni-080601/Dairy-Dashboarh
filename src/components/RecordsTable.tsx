@@ -1,13 +1,11 @@
 import React, { useState, useMemo } from 'react';
 import { useDairy } from '../context/DairyContext';
+import { format, parseISO } from 'date-fns';
 import {
-  Search,
   Download,
-  Sun,
-  Moon,
-  Edit2,
   Layers,
-  ArrowUpDown
+  ArrowUpDown,
+  CalendarRange
 } from 'lucide-react';
 
 interface RecordsTableProps {
@@ -15,17 +13,21 @@ interface RecordsTableProps {
 }
 
 export const RecordsTable: React.FC<RecordsTableProps> = ({ onSelectDateForEdit }) => {
-  const { dailyRecords, removeEntry } = useDairy();
+  const { dailyRecords } = useDairy();
 
-  const [searchDate, setSearchDate] = useState<string>('');
+  const currentMonth = (() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  })();
+  const [monthFilter, setMonthFilter] = useState<string>(currentMonth);
   const [filterSession, setFilterSession] = useState<'all' | 'both' | 'morning_only' | 'evening_only'>('all');
   const [sortOrder, setSortOrder] = useState<'desc' | 'asc'>('desc');
 
   const filteredRecords = useMemo(() => {
     let result = [...dailyRecords];
 
-    if (searchDate.trim()) {
-      result = result.filter(r => r.date.includes(searchDate.trim()));
+    if (monthFilter) {
+      result = result.filter(r => r.date.startsWith(monthFilter));
     }
 
     if (filterSession === 'both') {
@@ -43,10 +45,10 @@ export const RecordsTable: React.FC<RecordsTableProps> = ({ onSelectDateForEdit 
     }
 
     return result;
-  }, [dailyRecords, searchDate, filterSession, sortOrder]);
+  }, [dailyRecords, monthFilter, filterSession, sortOrder]);
 
   const handleExportCSV = () => {
-    if (dailyRecords.length === 0) {
+    if (filteredRecords.length === 0) {
       alert('No records available to export.');
       return;
     }
@@ -71,7 +73,7 @@ export const RecordsTable: React.FC<RecordsTableProps> = ({ onSelectDateForEdit 
       'Weighted Fat (%)'
     ];
 
-    const rows = dailyRecords.map(r => [
+    const rows = filteredRecords.map(r => [
       r.date,
       r.morning?.quantity ?? 0,
       r.morning?.fat ?? '',
@@ -98,17 +100,10 @@ export const RecordsTable: React.FC<RecordsTableProps> = ({ onSelectDateForEdit 
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement('a');
     link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `dairy_records_${new Date().toISOString().slice(0, 10)}.csv`);
+    link.setAttribute('download', `dairy_records_${monthFilter || new Date().toISOString().slice(0, 10)}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-  };
-
-  const handleDeleteSession = async (entryId?: string, sessionName?: string, date?: string) => {
-    if (!entryId) return;
-    if (confirm(`Delete ${sessionName} entry for ${date}?`)) {
-      await removeEntry(entryId);
-    }
   };
 
   return (
@@ -121,20 +116,26 @@ export const RecordsTable: React.FC<RecordsTableProps> = ({ onSelectDateForEdit 
               {filteredRecords.length} days
             </span>
           </h3>
-          <p className="text-xs text-ink-400">Filter by date, then edit or export.</p>
+          <p className="text-xs text-ink-400">Choose a month and year to view its collection history.</p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
           <div className="relative">
-            <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-ink-400" />
+            <CalendarRange className="pointer-events-none absolute left-3 top-2.5 h-3.5 w-3.5 text-ink-400" />
             <input
-              type="text"
-              placeholder="YYYY-MM"
-              value={searchDate}
-              onChange={(e) => setSearchDate(e.target.value)}
-              className="w-40 rounded-lg border border-ink-200 bg-white py-1.5 pl-8 pr-3 text-xs font-medium outline-none focus:border-forest-600 focus:ring-2 focus:ring-forest-600/15 sm:w-48"
+              type="month"
+              value={monthFilter}
+              onChange={(e) => setMonthFilter(e.target.value)}
+              aria-label="Filter records by month and year"
+              className="w-44 rounded-lg border border-ink-200 bg-white py-1.5 pl-8 pr-3 text-xs font-medium text-ink-700 outline-none focus:border-forest-600 focus:ring-2 focus:ring-forest-600/15 sm:w-48"
             />
           </div>
+
+          {monthFilter !== currentMonth && (
+            <button onClick={() => setMonthFilter(currentMonth)} className="btn-secondary py-1.5 text-xs">
+              This month
+            </button>
+          )}
 
           <select
             value={filterSession}
@@ -164,8 +165,8 @@ export const RecordsTable: React.FC<RecordsTableProps> = ({ onSelectDateForEdit 
       </div>
 
       {/* Main Table */}
-      <div className="overflow-x-auto">
-        <table className="data-table min-w-[920px] text-xs">
+      <div className="overflow-x-auto rounded-lg border border-ink-300">
+        <table className="data-table records-table min-w-[820px] border-collapse text-xs">
           <thead>
             <tr>
               <th>Date</th>
@@ -175,23 +176,36 @@ export const RecordsTable: React.FC<RecordsTableProps> = ({ onSelectDateForEdit 
               <th>Evening</th>
               <th>PM rate</th>
               <th className="text-right">PM amount</th>
-              <th className="text-right">Total L</th>
-              <th className="text-right">Day total</th>
-              <th className="text-center">Actions</th>
+              <th className="bg-orange-200 text-right text-orange-950">Total L</th>
+              <th className="bg-emerald-200 text-right text-emerald-950">Day total</th>
             </tr>
           </thead>
           <tbody>
             {filteredRecords.length === 0 ? (
               <tr>
-                <td colSpan={10} className="py-10 text-center text-ink-400">
+                <td colSpan={9} className="py-10 text-center text-ink-400">
                   <Layers className="mx-auto mb-1 h-6 w-6 opacity-50" />
                   No matching records.
                 </td>
               </tr>
             ) : (
-              filteredRecords.map((r) => (
-                <tr key={r.date} className="hover:bg-ink-50/70">
-                  <td className="whitespace-nowrap font-semibold text-ink-900">{r.date}</td>
+              filteredRecords.map((r, index) => (
+                <tr
+                  key={r.date}
+                  className={index % 2 === 0
+                    ? 'bg-orange-50 hover:bg-orange-100'
+                    : 'bg-emerald-50 hover:bg-emerald-100'}
+                >
+                  <td className="whitespace-nowrap font-semibold text-ink-900">
+                    <button
+                      type="button"
+                      onClick={() => onSelectDateForEdit(r.date)}
+                      title="Open this date for editing"
+                      className="text-left hover:underline"
+                    >
+                      {format(parseISO(r.date), 'dd-MMM-yyyy').toLowerCase()}
+                    </button>
+                  </td>
                   <td className="whitespace-nowrap">
                     {r.morning ? (
                       <div>
@@ -212,43 +226,15 @@ export const RecordsTable: React.FC<RecordsTableProps> = ({ onSelectDateForEdit 
                   </td>
                   <td className="whitespace-nowrap font-mono">{r.evening ? `₹${r.evening.rate_per_liter.toFixed(2)}` : '—'}</td>
                   <td className="whitespace-nowrap text-right font-mono">{r.evening ? `₹${r.evening.amount.toLocaleString('en-IN')}` : '—'}</td>
-                  <td className="whitespace-nowrap text-right font-mono font-semibold">{r.totalQuantity} L</td>
-                  <td className="whitespace-nowrap text-right font-mono font-semibold text-forest-800">₹{r.totalAmount.toLocaleString('en-IN')}</td>
-                  <td className="whitespace-nowrap text-center">
-                    <div className="flex items-center justify-center gap-1">
-                      <button
-                        onClick={() => onSelectDateForEdit(r.date)}
-                        title="Open this date in the collection form"
-                        className="rounded p-1 text-ink-400 hover:bg-ink-50 hover:text-forest-800"
-                      >
-                        <Edit2 className="h-3.5 w-3.5" />
-                      </button>
-                      {r.morning && (
-                        <button
-                          onClick={() => handleDeleteSession(r.morning?.id, 'morning', r.date)}
-                          title="Delete morning entry"
-                          className="rounded p-1 text-ink-400 hover:bg-ink-50 hover:text-ink-800"
-                        >
-                          <Sun className="h-3.5 w-3.5" />
-                        </button>
-                      )}
-                      {r.evening && (
-                        <button
-                          onClick={() => handleDeleteSession(r.evening?.id, 'evening', r.date)}
-                          title="Delete evening entry"
-                          className="rounded p-1 text-ink-400 hover:bg-ink-50 hover:text-ink-800"
-                        >
-                          <Moon className="h-3.5 w-3.5" />
-                        </button>
-                      )}
-                    </div>
-                  </td>
+                  <td className="whitespace-nowrap bg-orange-100 text-right font-mono font-bold text-orange-950">{r.totalQuantity} L</td>
+                  <td className="whitespace-nowrap bg-emerald-100 text-right font-mono font-bold text-emerald-950">₹{r.totalAmount.toLocaleString('en-IN')}</td>
                 </tr>
               ))
             )}
           </tbody>
         </table>
       </div>
+
     </div>
   );
 };

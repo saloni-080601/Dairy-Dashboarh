@@ -83,7 +83,7 @@ VALUES (
     28.0,
     42.00,
     25.00,
-    'Gokul Dairy Collection Center'
+    'Piyush''s Farm'
 )
 ON CONFLICT (id) DO NOTHING;
 
@@ -113,3 +113,46 @@ SELECT
 FROM public.milk_entries
 GROUP BY entry_date
 ORDER BY entry_date DESC;
+
+-- 8. Create cows table (Cow Profiles & Groups)
+CREATE TABLE IF NOT EXISTS public.cows (
+    id TEXT PRIMARY KEY,
+    name VARCHAR(100) NOT NULL UNIQUE,
+    tag VARCHAR(50),
+    created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
+);
+
+-- 9. Create cow_milk_records table
+CREATE TABLE IF NOT EXISTS public.cow_milk_records (
+    id TEXT PRIMARY KEY,
+    cow_id TEXT NOT NULL REFERENCES public.cows(id) ON DELETE CASCADE,
+    date DATE NOT NULL,
+    session VARCHAR(10) NOT NULL CHECK (session IN ('morning', 'evening')),
+    quantity NUMERIC(6, 2) NOT NULL CHECK (quantity > 0),
+    created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL,
+    CONSTRAINT unique_cow_date_session UNIQUE (cow_id, date, session)
+);
+
+CREATE INDEX IF NOT EXISTS idx_cow_milk_records_date ON public.cow_milk_records (date DESC);
+CREATE INDEX IF NOT EXISTS idx_cow_milk_records_cow ON public.cow_milk_records (cow_id);
+
+-- Enable RLS & policies
+ALTER TABLE public.cows ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.cow_milk_records ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Allow anonymous all access on cows" ON public.cows;
+CREATE POLICY "Allow anonymous all access on cows"
+    ON public.cows
+    FOR ALL
+    TO anon, authenticated
+    USING (true)
+    WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Allow anonymous all access on cow_milk_records" ON public.cow_milk_records;
+CREATE POLICY "Allow anonymous all access on cow_milk_records"
+    ON public.cow_milk_records
+    FOR ALL
+    TO anon, authenticated
+    USING (true)
+    WITH CHECK (true);
+
