@@ -53,23 +53,30 @@ CREATE INDEX IF NOT EXISTS idx_milk_entries_date_session ON public.milk_entries 
 ALTER TABLE public.milk_entries ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.rate_settings ENABLE ROW LEVEL SECURITY;
 
--- 5. Policies for full access (public / anon can read, insert, update, delete for personal dairy dashboard)
--- For single-user dairy or open collection desk:
 DROP POLICY IF EXISTS "Allow anonymous all access on milk_entries" ON public.milk_entries;
-CREATE POLICY "Allow anonymous all access on milk_entries"
+DROP POLICY IF EXISTS "Authenticated staff can manage milk entries" ON public.milk_entries;
+CREATE POLICY "Authenticated staff can manage milk entries"
     ON public.milk_entries
     FOR ALL
-    TO anon, authenticated
-    USING (true)
-    WITH CHECK (true);
+    TO authenticated
+    USING (COALESCE(auth.jwt() -> 'app_metadata' ->> 'role', 'entry') IN ('admin', 'entry'))
+    WITH CHECK (COALESCE(auth.jwt() -> 'app_metadata' ->> 'role', 'entry') IN ('admin', 'entry'));
 
 DROP POLICY IF EXISTS "Allow anonymous all access on rate_settings" ON public.rate_settings;
-CREATE POLICY "Allow anonymous all access on rate_settings"
+DROP POLICY IF EXISTS "Authenticated staff can read rate settings" ON public.rate_settings;
+DROP POLICY IF EXISTS "Admins can manage rate settings" ON public.rate_settings;
+CREATE POLICY "Authenticated staff can read rate settings"
+    ON public.rate_settings
+    FOR SELECT
+    TO authenticated
+    USING (true);
+
+CREATE POLICY "Admins can manage rate settings"
     ON public.rate_settings
     FOR ALL
-    TO anon, authenticated
-    USING (true)
-    WITH CHECK (true);
+    TO authenticated
+    USING (auth.jwt() -> 'app_metadata' ->> 'role' = 'admin')
+    WITH CHECK (auth.jwt() -> 'app_metadata' ->> 'role' = 'admin');
 
 -- 6. Insert default rate configuration if not exists
 INSERT INTO public.rate_settings (id, setting_name, formula_mode, base_fat_rate, base_snf_rate, standard_fat, standard_clr, standard_rate, min_rate, dairy_name)
@@ -141,18 +148,130 @@ ALTER TABLE public.cows ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.cow_milk_records ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "Allow anonymous all access on cows" ON public.cows;
-CREATE POLICY "Allow anonymous all access on cows"
+DROP POLICY IF EXISTS "Admins can manage cows" ON public.cows;
+DROP POLICY IF EXISTS "Authenticated staff can manage cows" ON public.cows;
+CREATE POLICY "Authenticated staff can manage cows"
     ON public.cows
     FOR ALL
-    TO anon, authenticated
-    USING (true)
-    WITH CHECK (true);
+    TO authenticated
+    USING (COALESCE(auth.jwt() -> 'app_metadata' ->> 'role', 'entry') IN ('admin', 'entry'))
+    WITH CHECK (COALESCE(auth.jwt() -> 'app_metadata' ->> 'role', 'entry') IN ('admin', 'entry'));
 
 DROP POLICY IF EXISTS "Allow anonymous all access on cow_milk_records" ON public.cow_milk_records;
-CREATE POLICY "Allow anonymous all access on cow_milk_records"
+DROP POLICY IF EXISTS "Admins can manage cow milk records" ON public.cow_milk_records;
+DROP POLICY IF EXISTS "Authenticated staff can manage cow milk records" ON public.cow_milk_records;
+CREATE POLICY "Authenticated staff can manage cow milk records"
     ON public.cow_milk_records
     FOR ALL
-    TO anon, authenticated
-    USING (true)
-    WITH CHECK (true);
+    TO authenticated
+    USING (COALESCE(auth.jwt() -> 'app_metadata' ->> 'role', 'entry') IN ('admin', 'entry'))
+    WITH CHECK (COALESCE(auth.jwt() -> 'app_metadata' ->> 'role', 'entry') IN ('admin', 'entry'));
 
+-- 10. Create expenses table (Cow Feeds, Healthcare & Dairy Operations)
+CREATE TABLE IF NOT EXISTS public.expenses (
+    id TEXT PRIMARY KEY,
+    date DATE NOT NULL,
+    category_type VARCHAR(20) NOT NULL CHECK (category_type IN ('cow', 'dairy')),
+    subcategory VARCHAR(50) NOT NULL,
+    title VARCHAR(200) NOT NULL,
+    amount NUMERIC(10, 2) NOT NULL CHECK (amount >= 0),
+    target_cow VARCHAR(100),
+    payment_mode VARCHAR(30) DEFAULT 'cash',
+    receipt_no VARCHAR(100),
+    notes TEXT,
+    created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL,
+    updated_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_expenses_date ON public.expenses (date DESC);
+CREATE INDEX IF NOT EXISTS idx_expenses_category_type ON public.expenses (category_type);
+CREATE INDEX IF NOT EXISTS idx_expenses_subcategory ON public.expenses (subcategory);
+
+ALTER TABLE public.expenses ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Allow anonymous all access on expenses" ON public.expenses;
+DROP POLICY IF EXISTS "Admins can manage expenses" ON public.expenses;
+CREATE POLICY "Admins can manage expenses"
+    ON public.expenses
+    FOR ALL
+    TO authenticated
+    USING (auth.jwt() -> 'app_metadata' ->> 'role' = 'admin')
+    WITH CHECK (auth.jwt() -> 'app_metadata' ->> 'role' = 'admin');
+
+-- 11. Create calves table (Calves & Youngstock Management)
+CREATE TABLE IF NOT EXISTS public.calves (
+    id TEXT PRIMARY KEY,
+    tag_number VARCHAR(50) NOT NULL UNIQUE,
+    name VARCHAR(100) NOT NULL,
+    mother_id VARCHAR(50) NOT NULL,
+    gender VARCHAR(10) NOT NULL CHECK (gender IN ('female', 'male')),
+    breed VARCHAR(100) NOT NULL,
+    dob DATE NOT NULL,
+    birth_weight NUMERIC(5, 2),
+    current_weight NUMERIC(5, 2),
+    sire_details TEXT,
+    stage VARCHAR(30) NOT NULL DEFAULT 'milk_fed' CHECK (stage IN ('milk_fed', 'weaned', 'heifer', 'bull_calf', 'sold', 'deceased')),
+    health_status VARCHAR(30) NOT NULL DEFAULT 'healthy' CHECK (health_status IN ('healthy', 'treatment', 'vaccinated', 'sick')),
+    milk_intake_liters NUMERIC(4, 2) DEFAULT 0,
+    feed_type VARCHAR(50) DEFAULT 'milk_and_starter',
+    colostrum_fed BOOLEAN DEFAULT TRUE,
+    deworming_date DATE,
+    vaccines_given TEXT,
+    notes TEXT,
+    created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL,
+    updated_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_calves_mother_id ON public.calves (mother_id);
+CREATE INDEX IF NOT EXISTS idx_calves_dob ON public.calves (dob DESC);
+CREATE INDEX IF NOT EXISTS idx_calves_stage ON public.calves (stage);
+
+ALTER TABLE public.calves ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Allow anonymous all access on calves" ON public.calves;
+DROP POLICY IF EXISTS "Admins can manage calves" ON public.calves;
+CREATE POLICY "Admins can manage calves"
+    ON public.calves
+    FOR ALL
+    TO authenticated
+    USING (auth.jwt() -> 'app_metadata' ->> 'role' = 'admin')
+    WITH CHECK (auth.jwt() -> 'app_metadata' ->> 'role' = 'admin');
+
+-- 12. Create cow_breeding table (Reproduction & Next Pregnancy Tracking)
+CREATE TABLE IF NOT EXISTS public.cow_breeding (
+    id TEXT PRIMARY KEY,
+    cow_id VARCHAR(50) NOT NULL UNIQUE,
+    last_calving_date DATE NOT NULL,
+    status VARCHAR(30) NOT NULL DEFAULT 'resting' CHECK (status IN ('resting', 'heat_ready', 'inseminated', 'confirmed_pregnant', 'dry_period', 'problem')),
+    last_heat_date DATE,
+    ai_date DATE,
+    ai_sire_code VARCHAR(100),
+    ai_technician VARCHAR(100),
+    pd_date DATE,
+    is_pregnant BOOLEAN DEFAULT FALSE,
+    expected_calving_date DATE,
+    expected_dry_date DATE,
+    next_heat_expected_date DATE,
+    notes TEXT,
+    created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL,
+    updated_at TIMESTAMPTZ DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_cow_breeding_cow_id ON public.cow_breeding (cow_id);
+CREATE INDEX IF NOT EXISTS idx_cow_breeding_status ON public.cow_breeding (status);
+CREATE INDEX IF NOT EXISTS idx_cow_breeding_next_calving ON public.cow_breeding (expected_calving_date);
+
+ALTER TABLE public.cow_breeding ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Allow anonymous all access on cow_breeding" ON public.cow_breeding;
+DROP POLICY IF EXISTS "Admins can manage breeding records" ON public.cow_breeding;
+CREATE POLICY "Admins can manage breeding records"
+    ON public.cow_breeding
+    FOR ALL
+    TO authenticated
+    USING (auth.jwt() -> 'app_metadata' ->> 'role' = 'admin')
+    WITH CHECK (auth.jwt() -> 'app_metadata' ->> 'role' = 'admin');
+
+-- Assign trusted roles through Supabase Auth app_metadata (never user_metadata):
+-- {"role":"admin"} for administrators and {"role":"entry"} for collection staff.
+-- Entry staff can use daily collection and cow group records; other data remains admin-only.

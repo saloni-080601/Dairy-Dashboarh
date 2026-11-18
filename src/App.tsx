@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { format, getDaysInMonth } from 'date-fns';
+import { format, getDaysInMonth, parseISO } from 'date-fns';
 import { DairyProvider, useDairy } from './context/DairyContext';
 import { Header } from './components/Header';
 import { StatCard } from './components/StatCard';
@@ -16,6 +16,8 @@ import { RateChartViewerModal } from './components/RateChartViewerModal';
 import { LoginPage } from './components/LoginPage';
 import { CowGroupRecords } from './components/CowGroupRecords';
 import { MonthlySummaryTable } from './components/MonthlySummaryTable';
+import { ExpensesManager } from './components/ExpensesManager';
+import { CalfManager } from './components/CalfManager';
 import { TenDayPeriod } from './types/dairy';
 import { getSupabaseClient } from './lib/supabase';
 import { buildPeriodObject } from './lib/calculations';
@@ -31,6 +33,8 @@ import {
   Settings2,
   FileText,
   Users,
+  Receipt,
+  Baby,
 } from 'lucide-react';
 
 interface RecordsBillingPageProps {
@@ -82,9 +86,31 @@ interface OverviewPageProps {
   onOpenBillForPeriod?: (period: TenDayPeriod) => void;
 }
 
+const SECTION_PATHS: Record<string, string> = {
+  'daily-entry': '/daily-collection',
+  overview: '/overview',
+  'cow-groups': '/cow-groups',
+  calves: '/calves',
+  records: '/records',
+  expenses: '/expenses',
+};
+const ENTRY_SECTIONS = new Set(['daily-entry', 'cow-groups']);
+
+function getSectionFromPath(pathname: string): string {
+  return Object.entries(SECTION_PATHS).find(([, path]) => path === pathname)?.[0] ?? 'daily-entry';
+}
+
 const OverviewPage: React.FC<OverviewPageProps> = ({ onOpenBillForPeriod }) => {
   const { selectedDayRecord, dailyRecords, selectedDate } = useDairy();
   const [tab, setTab] = useState<'summary' | 'analytics'>('summary');
+  const lifetimeRevenue = useMemo(() => {
+    const total = dailyRecords.reduce((sum, record) => sum + (record.totalAmount ?? 0), 0);
+    const firstRecordDate = dailyRecords.reduce<string | null>(
+      (earliest, record) => earliest === null || record.date < earliest ? record.date : earliest,
+      null
+    );
+    return { total, firstRecordDate };
+  }, [dailyRecords]);
 
   const { monthKey, monthStart, daysInMonth, monthLabel, monthShort, todayCycle } = useMemo(() => {
     let baseDate = new Date();
@@ -140,7 +166,7 @@ const OverviewPage: React.FC<OverviewPageProps> = ({ onOpenBillForPeriod }) => {
 
   return (
     <div className="space-y-5">
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-5">
         <StatCard
           title="Today's milk"
           value={selectedDayRecord?.totalQuantity ?? 0}
@@ -159,6 +185,14 @@ const OverviewPage: React.FC<OverviewPageProps> = ({ onOpenBillForPeriod }) => {
           value={selectedDayRecord?.avgRate ? `₹${selectedDayRecord.avgRate.toFixed(2)}` : '₹0.00'}
           subtitle={`Fat ${selectedDayRecord?.avgFat ?? 0}% · CLR ${selectedDayRecord?.avgClr ?? 0}`}
           icon={<Gauge className="h-4 w-4" />}
+        />
+        <StatCard
+          title="Total revenue"
+          value={`₹${lifetimeRevenue.total.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+          subtitle={lifetimeRevenue.firstRecordDate
+            ? `All time · Since ${format(parseISO(lifetimeRevenue.firstRecordDate), 'dd MMM yyyy')}`
+            : 'All recorded milk entries'}
+          icon={<Coins className="h-4 w-4" />}
         />
         <TenDayStatCard
           periods={currentMonthPeriods}
@@ -208,21 +242,45 @@ const OverviewPage: React.FC<OverviewPageProps> = ({ onOpenBillForPeriod }) => {
 
 const DashboardContent: React.FC = () => {
   const { setSelectedDate, tenDayPeriods, refreshData } = useDairy();
+  type AuthRole = 'admin' | 'entry';
 
   const [showSettingsModal, setShowSettingsModal] = useState<boolean>(false);
   const [showSupabaseModal, setShowSupabaseModal] = useState<boolean>(false);
   const [showChartModal, setShowChartModal] = useState<boolean>(false);
   const [authEmail, setAuthEmail] = useState<string | null>(null);
+  const [authRole, setAuthRole] = useState<AuthRole>('entry');
   const [authReady, setAuthReady] = useState(false);
   const [authVersion, setAuthVersion] = useState(0);
   const [billPeriod, setBillPeriod] = useState<TenDayPeriod | null>(null);
-  const [activeSection, setActiveSection] = useState('daily-entry');
+  const [activeSection, setActiveSection] = useState(() => getSectionFromPath(window.location.pathname));
+  const isAdmin = authRole === 'admin';
+
+  useEffect(() => {
+    const syncSectionFromPath = () => setActiveSection(getSectionFromPath(window.location.pathname));
+    window.addEventListener('popstate', syncSectionFromPath);
+    return () => window.removeEventListener('popstate', syncSectionFromPath);
+  }, []);
+
+  const navigateToSection = (section: string) => {
+    if (!isAdmin && !ENTRY_SECTIONS.has(section)) section = 'daily-entry';
+    const path = SECTION_PATHS[section];
+    if (!path) return;
+    if (window.location.pathname !== path) window.history.pushState({}, '', path);
+    setActiveSection(section);
+  };
+
+  useEffect(() => {
+    if (!authReady || !authEmail || isAdmin || ENTRY_SECTIONS.has(activeSection)) return;
+    window.history.replaceState({}, '', SECTION_PATHS['daily-entry']);
+    setActiveSection('daily-entry');
+  }, [authReady, authEmail, isAdmin, activeSection]);
 
   useEffect(() => {
     let active = true;
     const client = getSupabaseClient();
     if (!client) {
       setAuthEmail(null);
+      setAuthRole('entry');
       setAuthReady(true);
       return;
     }
@@ -230,7 +288,9 @@ const DashboardContent: React.FC = () => {
     setAuthReady(false);
     client.auth.getSession().then(({ data }) => {
       if (active) {
-        setAuthEmail(data.session?.user.email ?? null);
+        const user = data.session?.user;
+        setAuthEmail(user?.email ?? null);
+        setAuthRole(user?.app_metadata?.role === 'admin' ? 'admin' : 'entry');
         setAuthReady(true);
       }
     }).catch(() => {
@@ -238,7 +298,11 @@ const DashboardContent: React.FC = () => {
     });
 
     const { data: { subscription } } = client.auth.onAuthStateChange((_event, session) => {
-      if (active) setAuthEmail(session?.user.email ?? null);
+      if (active) {
+        const user = session?.user;
+        setAuthEmail(user?.email ?? null);
+        setAuthRole(user?.app_metadata?.role === 'admin' ? 'admin' : 'entry');
+      }
     });
 
     return () => {
@@ -251,6 +315,7 @@ const DashboardContent: React.FC = () => {
     const client = getSupabaseClient();
     if (client) await client.auth.signOut();
     setAuthEmail(null);
+    setAuthRole('entry');
   };
 
   const handleSupabaseModalClose = () => {
@@ -286,21 +351,27 @@ const DashboardContent: React.FC = () => {
   const sectionLinks = [
     { id: 'daily-entry', label: 'Daily collection', icon: Droplets },
     { id: 'cow-groups', label: 'Cow group data', icon: Users },
+    { id: 'calves', label: 'Calves & Breeding', icon: Baby },
     { id: 'records', label: 'Records & billing', icon: BarChart3 },
+    { id: 'expenses', label: 'Expenses', icon: Receipt },
     { id: 'overview', label: 'Overview', icon: Home },
-    
-  ];
+  ].filter(section => isAdmin || ENTRY_SECTIONS.has(section.id));
+
+  const currentSection = isAdmin || ENTRY_SECTIONS.has(activeSection) ? activeSection : 'daily-entry';
 
   const pageTitles: Record<string, { title: string; subtitle: string }> = {
     'daily-entry': { title: 'Daily collection', subtitle: 'Enter quantity, fat and CLR. Rate is calculated automatically.' },
     overview: { title: 'Overview', subtitle: 'Today’s milk, earnings and quality at a glance.' },
     records: { title: 'Records & billing', subtitle: 'History, 10-day cycles and monthly totals.' },
     'cow-groups': { title: 'Cow group data', subtitle: 'Group-wise morning and evening milk records.' },
+    calves: { title: 'Calves & Breeding Management', subtitle: 'Track offspring, calf feeding, heat cycles, and expected calving dates.' },
+    expenses: { title: 'Dairy & Cow Expenses', subtitle: 'Track cattle feed, healthcare, AI breeding, and dairy operational costs vs revenue.' },
   };
 
   return (
     <div className="flex min-h-screen flex-col bg-paper">
       <Header
+        isAdmin={isAdmin}
         onOpenSettings={() => setShowSettingsModal(true)}
         onOpenSupabase={() => setShowSupabaseModal(true)}
         onOpenBill={handleOpenDefaultBill}
@@ -316,9 +387,9 @@ const DashboardContent: React.FC = () => {
           {sectionLinks.map(({ id, label, icon: Icon }) => (
             <button
               key={id}
-              onClick={() => setActiveSection(id)}
+              onClick={() => navigateToSection(id)}
               className={`flex flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-lg px-3 py-2.5 text-xs font-semibold transition ${
-                activeSection === id ? 'bg-forest-800 text-white' : 'text-ink-600 hover:bg-ink-50'
+              currentSection === id ? 'bg-forest-800 text-white' : 'text-ink-600 hover:bg-ink-50'
               }`}
             >
               <Icon className="h-4 w-4" />
@@ -337,52 +408,60 @@ const DashboardContent: React.FC = () => {
               {sectionLinks.map(({ id, label, icon: Icon }) => (
                 <button
                   key={id}
-                  onClick={() => setActiveSection(id)}
+                  onClick={() => navigateToSection(id)}
                   className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-semibold transition ${
-                    activeSection === id ? 'bg-forest-800 text-white' : 'text-ink-600 hover:bg-ink-50'
+                    currentSection === id ? 'bg-forest-800 text-white' : 'text-ink-600 hover:bg-ink-50'
                   }`}
                 >
                   <Icon className="h-4 w-4 shrink-0" />{label}
                 </button>
               ))}
             </nav>
-            <div className="my-3 border-t border-ink-100" />
-            <p className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-ink-400">Rates</p>
-            <button onClick={() => setShowChartModal(true)} className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-semibold text-ink-600 hover:bg-ink-50">
-              <FileText className="h-4 w-4 shrink-0" />Rate charts
-            </button>
-            <button onClick={() => setShowSettingsModal(true)} className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-semibold text-ink-600 hover:bg-ink-50">
-              <Settings2 className="h-4 w-4 shrink-0" />Rate formula
-            </button>
+            {isAdmin && (
+              <>
+                <div className="my-3 border-t border-ink-100" />
+                <p className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-ink-400">Rates</p>
+                <button onClick={() => setShowChartModal(true)} className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-semibold text-ink-600 hover:bg-ink-50">
+                  <FileText className="h-4 w-4 shrink-0" />Rate charts
+                </button>
+                <button onClick={() => setShowSettingsModal(true)} className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-semibold text-ink-600 hover:bg-ink-50">
+                  <Settings2 className="h-4 w-4 shrink-0" />Rate formula
+                </button>
+              </>
+            )}
           </aside>
 
           <div className="min-w-0 w-full flex-1 space-y-5">
             <div>
-              <h2 className="text-xl font-semibold tracking-tight text-ink-900">{pageTitles[activeSection].title}</h2>
-              <p className="mt-0.5 text-sm text-ink-500">{pageTitles[activeSection].subtitle}</p>
+              <h2 className="text-xl font-semibold tracking-tight text-ink-900">{pageTitles[currentSection].title}</h2>
+              <p className="mt-0.5 text-sm text-ink-500">{pageTitles[currentSection].subtitle}</p>
             </div>
 
-            {activeSection === 'overview' && (
+            {currentSection === 'overview' && (
               <OverviewPage onOpenBillForPeriod={handleOpenBillForPeriod} />
             )}
 
-            {activeSection === 'daily-entry' && (
+            {currentSection === 'daily-entry' && (
               <section aria-labelledby="daily-entry-heading">
                 <DailyEntrySection />
               </section>
             )}
 
-            {activeSection === 'records' && (
+            {currentSection === 'records' && (
               <RecordsBillingPage
                 onOpenBillForPeriod={handleOpenBillForPeriod}
                 onSelectDateForEdit={(date) => {
                   setSelectedDate(date);
-                  setActiveSection('daily-entry');
+                  navigateToSection('daily-entry');
                 }}
               />
             )}
 
-            {activeSection === 'cow-groups' && <CowGroupRecords />}
+            {currentSection === 'cow-groups' && <CowGroupRecords />}
+
+            {currentSection === 'calves' && <CalfManager />}
+
+            {currentSection === 'expenses' && <ExpensesManager />}
           </div>
         </div>
       </main>

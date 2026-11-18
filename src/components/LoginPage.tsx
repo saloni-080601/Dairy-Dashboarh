@@ -7,7 +7,7 @@ interface LoginPageProps {
   onOpenSupabase: () => void;
 }
 
-export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onOpenSupabase }) => {
+export const LoginPage: React.FC<LoginPageProps> = ({ onLogin}) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -60,7 +60,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onOpenSupabase })
           <button type="submit" disabled={isLoading} className="btn-primary min-h-11 w-full disabled:opacity-60">{isLoading ? 'Logging in…' : 'Login'}</button>
         </form>
 
-        <button type="button" onClick={onOpenSupabase} className="mt-5 w-full text-center text-xs font-medium text-slate-500 underline decoration-slate-300 underline-offset-4 hover:text-orange-700">Supabase connection settings</button>
+        {/* <button type="button" onClick={onOpenSupabase} className="mt-5 w-full text-center text-xs font-medium text-slate-500 underline decoration-slate-300 underline-offset-4 hover:text-orange-700">Supabase connection settings</button> */}
       </section>
     </main>
   );

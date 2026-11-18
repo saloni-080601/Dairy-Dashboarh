@@ -227,6 +227,9 @@ export const CowGroupRecords: React.FC = () => {
       morningTotal: Number(morningTotal.toFixed(1)),
       eveningTotal: Number(eveningTotal.toFixed(1)),
       dayTotal: Number((morningTotal + eveningTotal).toFixed(1)),
+      averagePerCow: milkedCowsCount > 0
+        ? Number(((morningTotal + eveningTotal) / milkedCowsCount).toFixed(1))
+        : 0,
       milkedCowsCount,
       totalCowsCount: cows.length,
     };
@@ -258,20 +261,16 @@ export const CowGroupRecords: React.FC = () => {
         const selectedManual = manual?.get(selectedCow);
         const morning = selectedManual?.morning ?? null;
         const evening = selectedManual?.evening ?? null;
-        let allMorning = 0;
-        let allEvening = 0;
+        let dayTotal = 0;
         manual?.forEach(sessions => {
-          allMorning += sessions.morning ?? 0;
-          allEvening += sessions.evening ?? 0;
+          dayTotal += (sessions.morning ?? 0) + (sessions.evening ?? 0);
         });
         return {
           date,
           morning,
           evening,
           cowTotal: (morning ?? 0) + (evening ?? 0),
-          allMorning,
-          allEvening,
-          dayTotal: allMorning + allEvening,
+          dayTotal,
         };
       });
   }, [month, cowRecords, cows, selectedCow]);
@@ -283,11 +282,9 @@ export const CowGroupRecords: React.FC = () => {
           morning: sum.morning + (row.morning ?? 0),
           evening: sum.evening + (row.evening ?? 0),
           cowTotal: sum.cowTotal + row.cowTotal,
-          allMorning: sum.allMorning + row.allMorning,
-          allEvening: sum.allEvening + row.allEvening,
-          allTotal: sum.allTotal + row.dayTotal,
+          dayTotal: sum.dayTotal + row.dayTotal,
         }),
-        { morning: 0, evening: 0, cowTotal: 0, allMorning: 0, allEvening: 0, allTotal: 0 }
+        { morning: 0, evening: 0, cowTotal: 0, dayTotal: 0 }
       ),
     [historyRows]
   );
@@ -335,7 +332,7 @@ export const CowGroupRecords: React.FC = () => {
       lastMilkingDate,
     };
   }, [cows, cowRecords, selectedCow]);
- 
+
   // Revenue calculations based on overall average rate per litre
   const cowRevenue = useMemo(() => {
     return Number((cowLifetimeStats.grandTotal * overallAvgRate).toFixed(2));
@@ -344,6 +341,17 @@ export const CowGroupRecords: React.FC = () => {
   const cowDailyRevenue = useMemo(() => {
     return Number((cowLifetimeStats.avgDaily * overallAvgRate).toFixed(2));
   }, [cowLifetimeStats.avgDaily, overallAvgRate]);
+
+  const allCowsLifetimeStats = useMemo(() => {
+    const totalMilk = cowRecords.reduce((total, record) => total + record.quantity, 0);
+    const milkingDays = new Set(cowRecords.map(record => record.date)).size;
+    const dailyAverage = milkingDays > 0 ? Number((totalMilk / milkingDays).toFixed(1)) : 0;
+    return {
+      totalMilk: Number(totalMilk.toFixed(1)),
+      dailyAverage,
+      revenue: Number((totalMilk * overallAvgRate).toFixed(2)),
+    };
+  }, [cowRecords, overallAvgRate]);
 
   // -------------------------------------------------------------
   // Actions: Save Cow, Save Milk Record, Delete Record
@@ -792,25 +800,15 @@ export const CowGroupRecords: React.FC = () => {
             </div>
 
             {/* Daily Summary Metric Cards */}
-            <div className="grid grid-cols-2 gap-3 p-4 sm:grid-cols-4 sm:p-5">
+            <div className="grid grid-cols-2 gap-3 p-4 sm:grid-cols-3 sm:p-5">
               <div className="rounded-lg border border-ink-100 bg-ink-50/60 p-3.5">
                 <span className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.1em] text-amber-700">
-                  <Sun className="h-3.5 w-3.5" /> Morning Total
+                  <Sparkles className="h-3.5 w-3.5" /> Daily Average per Cow
                 </span>
                 <p className="mt-2 font-mono text-2xl font-bold text-ink-900">
-                  {litres(dailyTotals.morningTotal)}
+                  {litres(dailyTotals.averagePerCow)}
                 </p>
-                <p className="mt-1 text-[11px] text-ink-500">All cows AM collection</p>
-              </div>
-
-              <div className="rounded-lg border border-ink-100 bg-ink-50/60 p-3.5">
-                <span className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.1em] text-indigo-700">
-                  <Moon className="h-3.5 w-3.5" /> Evening Total
-                </span>
-                <p className="mt-2 font-mono text-2xl font-bold text-ink-900">
-                  {litres(dailyTotals.eveningTotal)}
-                </p>
-                <p className="mt-1 text-[11px] text-ink-500">All cows PM collection</p>
+                <p className="mt-1 text-[11px] text-ink-500">Day total ÷ cows milked</p>
               </div>
 
               <div className="rounded-lg bg-forest-800 p-3.5 text-white shadow-xs">
@@ -1030,8 +1028,51 @@ export const CowGroupRecords: React.FC = () => {
               </p>
             </div>
 
+            {/* Combined lifetime totals for every cow */}
+            <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <div className="rounded-lg border border-amber-200 bg-amber-50/60 p-3.5">
+                <span className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-amber-900">
+                  <Sparkles className="h-3.5 w-3.5" /> All Cows Daily Avg Milk
+                </span>
+                <p className="mt-2 font-mono text-2xl font-bold text-ink-900">
+                  {litres(allCowsLifetimeStats.dailyAverage)}<span className="text-xs font-normal text-ink-500">/day</span>
+                </p>
+                <p className="mt-1 text-[11px] text-amber-800">Average combined collection per day</p>
+              </div>
+              <div className="rounded-lg border border-amber-200 bg-amber-50/60 p-3.5">
+                <span className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-amber-900">
+                  <Users className="h-3.5 w-3.5" /> All Cows Total Milk
+                </span>
+                <p className="mt-2 font-mono text-2xl font-bold text-ink-900">{litres(allCowsLifetimeStats.totalMilk)}</p>
+                <p className="mt-1 text-[11px] text-amber-800">Combined lifetime collection</p>
+              </div>
+
+
+
+              <div className="rounded-lg border border-amber-200 bg-amber-50/60 p-3.5">
+                <span className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-amber-900">
+                  <Coins className="h-3.5 w-3.5" /> All Cows Revenue
+                </span>
+                <p className="mt-2 font-mono text-2xl font-bold text-ink-900">
+                  ₹{allCowsLifetimeStats.revenue.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </p>
+                <p className="mt-1 text-[11px] text-amber-800">Combined total @ ₹{overallAvgRate.toFixed(2)}/L</p>
+              </div>
+
+              <div className="rounded-lg border border-amber-200 bg-amber-50/60 p-3.5">
+                <span className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-amber-900">
+                  <TrendingUp className="h-3.5 w-3.5" /> All Cows Daily Avg Revenue
+                </span>
+                <p className="mt-2 font-mono text-2xl font-bold text-ink-900">
+                  ₹{(allCowsLifetimeStats.dailyAverage * overallAvgRate).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  <span className="text-xs font-normal text-ink-500">/day</span>
+                </p>
+                <p className="mt-1 text-[11px] text-amber-800">Estimated daily combined earning</p>
+              </div>
+            </div>
+
             {/* Quick Cow Filter Buttons */}
-            <div className="pt-4">
+            <div className="mt-5 border-t border-ink-100 pt-4">
               <div className="mb-2 flex items-center justify-between">
                 <span className="text-[11px] font-semibold uppercase tracking-[0.1em] text-ink-400">
                   Select Cow / Group
@@ -1061,10 +1102,8 @@ export const CowGroupRecords: React.FC = () => {
               </div>
             </div>
 
-            {/* Lifetime KPI Metric Cards with Revenue Calculation (Morning & Evening Cards Removed) */}
+            {/* Selected cow lifetime KPI cards */}
             <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
-
-                {/* Card 3: Daily Avg Milk */}
               <div className="rounded-lg border border-ink-100 bg-ink-50/60 p-3.5">
                 <span className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-ink-700">
                   <Sparkles className="h-3.5 w-3.5 text-amber-600" /> {selectedCow} Daily Avg Milk
@@ -1075,14 +1114,12 @@ export const CowGroupRecords: React.FC = () => {
                 </p>
                 <p className="mt-1 text-[11px] text-ink-500">Average milk per milking day</p>
               </div>
-              {/* Card 1: Total Milk */}
+
               <div className="rounded-lg border border-ink-100 bg-ink-50/60 p-3.5">
                 <span className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-forest-800">
                   <Droplets className="h-3.5 w-3.5" /> {selectedCow} Total Milk
                 </span>
-                <p className="mt-2 font-mono text-2xl font-bold text-ink-900">
-                  {litres(cowLifetimeStats.grandTotal)}
-                </p>
+                <p className="mt-2 font-mono text-2xl font-bold text-ink-900">{litres(cowLifetimeStats.grandTotal)}</p>
                 <p className="mt-1 text-[11px] text-ink-500 truncate">
                   {cowLifetimeStats.milkingDaysCount} days milking
                   {cowLifetimeStats.firstMilkingDate
@@ -1091,7 +1128,6 @@ export const CowGroupRecords: React.FC = () => {
                 </p>
               </div>
 
-              {/* Card 2: Total Revenue per Cow */}
               <div className="rounded-lg bg-forest-800 p-3.5 text-white shadow-xs">
                 <span className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-forest-200">
                   <Coins className="h-3.5 w-3.5 text-forest-300" /> {selectedCow} Revenue
@@ -1104,9 +1140,6 @@ export const CowGroupRecords: React.FC = () => {
                 </p>
               </div>
 
-            
-
-              {/* Card 4: Daily Avg Revenue */}
               <div className="rounded-lg border border-forest-200 bg-forest-50/50 p-3.5">
                 <span className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-forest-800">
                   <TrendingUp className="h-3.5 w-3.5" /> Daily Avg Revenue
@@ -1157,8 +1190,6 @@ export const CowGroupRecords: React.FC = () => {
                     <th>{selectedCow} Morning</th>
                     <th>{selectedCow} Evening</th>
                     <th className="font-bold text-forest-800">{selectedCow} Total</th>
-                    <th>All Cows AM</th>
-                    <th>All Cows PM</th>
                     <th className="font-bold text-ink-900">Day Grand Total</th>
                   </tr>
                 </thead>
@@ -1173,8 +1204,6 @@ export const CowGroupRecords: React.FC = () => {
                       <td className="font-mono font-semibold text-forest-800">
                         {litres(day.cowTotal)}
                       </td>
-                      <td className="font-mono text-ink-600">{litres(day.allMorning)}</td>
-                      <td className="font-mono text-ink-600">{litres(day.allEvening)}</td>
                       <td className="font-mono font-bold text-ink-900">
                         {litres(day.dayTotal)}
                       </td>
@@ -1182,7 +1211,7 @@ export const CowGroupRecords: React.FC = () => {
                   ))}
                   {historyRows.length === 0 && (
                     <tr>
-                      <td colSpan={7} className="px-4 py-10 text-center text-ink-400">
+                      <td colSpan={5} className="px-4 py-10 text-center text-ink-400">
                         Is month ke liye koi collection records nahi hain.
                       </td>
                     </tr>
@@ -1195,9 +1224,7 @@ export const CowGroupRecords: React.FC = () => {
                       <td className="font-mono">{litres(monthTotals.morning)}</td>
                       <td className="font-mono">{litres(monthTotals.evening)}</td>
                       <td className="font-mono text-forest-800 font-extrabold">{litres(monthTotals.cowTotal)}</td>
-                      <td className="font-mono">{litres(monthTotals.allMorning)}</td>
-                      <td className="font-mono">{litres(monthTotals.allEvening)}</td>
-                      <td className="font-mono text-forest-900 font-extrabold">{litres(monthTotals.allTotal)}</td>
+                      <td className="font-mono text-forest-900 font-extrabold">{litres(monthTotals.dayTotal)}</td>
                     </tr>
                   </tfoot>
                 )}

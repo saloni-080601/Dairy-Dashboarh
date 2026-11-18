@@ -1,8 +1,9 @@
 import React from 'react';
 import { useDairy } from '../context/DairyContext';
-import { Sliders, Printer, Milk, RefreshCw, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Printer, Milk, RefreshCw } from 'lucide-react';
 
 interface HeaderProps {
+  isAdmin: boolean;
   onOpenSettings: () => void;
   onOpenSupabase: () => void;
   onOpenBill: () => void;
@@ -11,14 +12,12 @@ interface HeaderProps {
 }
 
 export const Header: React.FC<HeaderProps> = ({
-  onOpenSettings,
-  onOpenSupabase,
+  isAdmin,
   onOpenBill,
   onLogout,
   userEmail,
 }) => {
   const {
-    isSupabaseConnected,
     isLoading,
     refreshData,
     rateSettings,
@@ -45,34 +44,17 @@ export const Header: React.FC<HeaderProps> = ({
           <button onClick={onLogout} className="rounded-lg border border-ink-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-ink-700 hover:bg-ink-50 sm:px-3" title="Logout">
             Logout
           </button>
-          <button
-            onClick={onOpenSupabase}
-            className="hidden items-center gap-1.5 rounded-lg border border-ink-200 bg-white px-2.5 py-1.5 text-xs font-medium text-ink-600 hover:bg-ink-50 sm:flex"
-            title={isSupabaseConnected ? 'Database connected' : 'Local storage mode'}
-          >
-            {isSupabaseConnected
-              ? <CheckCircle2 className="h-3.5 w-3.5 text-forest-600" />
-              : <AlertCircle className="h-3.5 w-3.5 text-amber-600" />}
-            <span className="hidden md:inline">{isSupabaseConnected ? 'Connected' : 'Local'}</span>
-          </button>
 
-          <button
-            onClick={onOpenSettings}
-            className="btn-secondary py-1.5 text-xs"
-            title="Rate formula settings"
-          >
-            <Sliders className="h-4 w-4 text-ink-500" />
-            <span className="hidden lg:inline">Settings</span>
-          </button>
-
-          <button
-            onClick={onOpenBill}
-            className="btn-primary py-1.5 text-xs"
-            title="Generate 10-day bill"
-          >
-            <Printer className="h-3.5 w-3.5" />
-            <span className="hidden sm:inline">Bill</span>
-          </button>
+          {isAdmin && (
+            <button
+              onClick={onOpenBill}
+              className="btn-primary py-1.5 text-xs"
+              title="Generate 10-day bill"
+            >
+              <Printer className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Bill</span>
+            </button>
+          )}
 
           <button
             onClick={() => refreshData()}

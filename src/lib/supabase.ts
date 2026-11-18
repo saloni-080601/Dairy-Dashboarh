@@ -1,7 +1,18 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
-import { MilkEntry, MilkEntryInput, RateSettings } from '../types/dairy';
+import {
+  DairyExpense,
+  DairyExpenseInput,
+  MilkEntry,
+  MilkEntryInput,
+  RateSettings,
+  CalfRecord,
+  CalfRecordInput,
+  CowBreedingRecord,
+  CowBreedingInput,
+} from '../types/dairy';
 import { calculateSNF, calculateMilkRate, calculateAmount, DEFAULT_RATE_SETTINGS } from './calculations';
 import { generateSampleMilkEntries } from './mockData';
+import { generateSampleCalves, generateSampleBreedingRecords } from './calfData';
 import {
   DEFAULT_COW_RATE_CHART,
   DEFAULT_BUFFALO_RATE_CHART,
@@ -12,6 +23,9 @@ import {
 const STORAGE_KEY_ENTRIES = 'dairyflow_milk_entries';
 const STORAGE_KEY_SETTINGS = 'dairyflow_rate_settings';
 const STORAGE_KEY_CONFIG = 'dairyflow_supabase_config';
+const STORAGE_KEY_EXPENSES = 'dairyflow_expenses';
+const STORAGE_KEY_CALVES = 'dairyflow_calves';
+const STORAGE_KEY_BREEDING = 'dairyflow_cow_breeding';
 
 export type MilkRateCharts = {
   cow: Record<number, Record<string, number>>;
@@ -29,6 +43,321 @@ export interface CowMilkRecord {
   date: string;
   session: 'morning' | 'evening';
   quantity: number;
+}
+
+export async function fetchExpenses(): Promise<{ data: DairyExpense[]; isLocal: boolean; error?: string }> {
+  const client = getSupabaseClient();
+  if (!client) return { data: getLocalExpenses(), isLocal: true };
+
+  try {
+    const { data, error } = await client.from('expenses').select('*').order('date', { ascending: false });
+    if (error) return { data: getLocalExpenses(), isLocal: true, error: error.message };
+    return {
+      data: (data ?? []).map(row => ({
+        ...row,
+        id: String(row.id),
+        amount: Number(row.amount),
+      })) as DairyExpense[],
+      isLocal: false,
+    };
+  } catch (err) {
+    return {
+      data: getLocalExpenses(),
+      isLocal: true,
+      error: err instanceof Error ? err.message : String(err),
+    };
+  }
+}
+
+export async function saveExpense(
+  input: DairyExpenseInput
+): Promise<{ success: boolean; data?: DairyExpense; error?: string }> {
+  const now = new Date().toISOString();
+  const existing = input.id ? getLocalExpenses().find(expense => expense.id === input.id) : undefined;
+  const expense: DairyExpense = {
+    ...input,
+    id: input.id || `expense-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    payment_mode: input.payment_mode || 'cash',
+    created_at: existing?.created_at || now,
+    updated_at: now,
+  };
+
+  const client = getSupabaseClient();
+  if (!client) {
+    saveLocalExpense(expense);
+    return { success: true, data: expense };
+  }
+
+  try {
+    const { data, error } = await client.from('expenses').upsert(expense).select('*').single();
+    if (error) return { success: false, error: error.message };
+    return { success: true, data: { ...data, amount: Number(data.amount) } as DairyExpense };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+export async function deleteExpense(id: string): Promise<{ success: boolean; error?: string }> {
+  const client = getSupabaseClient();
+  if (!client) {
+    saveLocalExpenses(getLocalExpenses().filter(expense => expense.id !== id));
+    return { success: true };
+  }
+
+  try {
+    const { error } = await client.from('expenses').delete().eq('id', id);
+    if (error) return { success: false, error: error.message };
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+function getLocalExpenses(): DairyExpense[] {
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY_EXPENSES);
+    return stored ? JSON.parse(stored) as DairyExpense[] : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveLocalExpenses(expenses: DairyExpense[]): void {
+  localStorage.setItem(STORAGE_KEY_EXPENSES, JSON.stringify(expenses));
+}
+
+function saveLocalExpense(expense: DairyExpense): void {
+  const expenses = getLocalExpenses();
+  const existingIndex = expenses.findIndex(item => item.id === expense.id);
+  if (existingIndex >= 0) expenses[existingIndex] = expense;
+  else expenses.unshift(expense);
+  saveLocalExpenses(expenses);
+}
+
+// -----------------------------------------------------------------------------
+// Calf Records Persistence (Supabase + LocalStorage Fallback)
+// -----------------------------------------------------------------------------
+
+export function getLocalCalves(): CalfRecord[] {
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY_CALVES);
+    if (!stored) {
+      const initial = generateSampleCalves();
+      localStorage.setItem(STORAGE_KEY_CALVES, JSON.stringify(initial));
+      return initial;
+    }
+    return JSON.parse(stored) as CalfRecord[];
+  } catch {
+    return generateSampleCalves();
+  }
+}
+
+export function saveLocalCalves(calves: CalfRecord[]): void {
+  localStorage.setItem(STORAGE_KEY_CALVES, JSON.stringify(calves));
+}
+
+export async function fetchCalves(): Promise<{ data: CalfRecord[]; isLocal: boolean; error?: string }> {
+  const client = getSupabaseClient();
+  if (!client) return { data: getLocalCalves(), isLocal: true };
+
+  try {
+    const { data, error } = await client.from('calves').select('*').order('dob', { ascending: false });
+    if (error) return { data: getLocalCalves(), isLocal: true, error: error.message };
+    if (!data || data.length === 0) {
+      return { data: getLocalCalves(), isLocal: true };
+    }
+    return {
+      data: (data ?? []).map(row => ({
+        ...row,
+        id: String(row.id),
+        birth_weight: row.birth_weight != null ? Number(row.birth_weight) : undefined,
+        current_weight: row.current_weight != null ? Number(row.current_weight) : undefined,
+        milk_intake_liters: row.milk_intake_liters != null ? Number(row.milk_intake_liters) : undefined,
+      })) as CalfRecord[],
+      isLocal: false,
+    };
+  } catch (err) {
+    return {
+      data: getLocalCalves(),
+      isLocal: true,
+      error: err instanceof Error ? err.message : String(err),
+    };
+  }
+}
+
+export async function saveCalf(
+  input: CalfRecordInput
+): Promise<{ success: boolean; data?: CalfRecord; error?: string }> {
+  const now = new Date().toISOString();
+  const localList = getLocalCalves();
+  const existing = input.id ? localList.find(c => c.id === input.id) : undefined;
+
+  const calf: CalfRecord = {
+    id: input.id || `calf-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    tag_number: input.tag_number.trim(),
+    name: input.name?.trim() || input.tag_number.trim(),
+    mother_id: input.mother_id,
+    gender: input.gender,
+    breed: input.breed,
+    dob: input.dob,
+    birth_weight: input.birth_weight,
+    current_weight: input.current_weight,
+    sire_details: input.sire_details,
+    stage: input.stage || 'milk_fed',
+    health_status: input.health_status || 'healthy',
+    milk_intake_liters: input.milk_intake_liters,
+    feed_type: input.feed_type || 'milk_and_starter',
+    colostrum_fed: input.colostrum_fed !== false,
+    deworming_date: input.deworming_date,
+    vaccines_given: input.vaccines_given,
+    notes: input.notes,
+    created_at: existing?.created_at || now,
+    updated_at: now,
+  };
+
+  // Always update local storage
+  const existingIdx = localList.findIndex(c => c.id === calf.id);
+  if (existingIdx >= 0) localList[existingIdx] = calf;
+  else localList.unshift(calf);
+  saveLocalCalves(localList);
+
+  const client = getSupabaseClient();
+  if (!client) {
+    return { success: true, data: calf };
+  }
+
+  try {
+    const { data, error } = await client.from('calves').upsert(calf).select('*').single();
+    if (error) return { success: true, data: calf, error: error.message };
+    return { success: true, data: data as CalfRecord };
+  } catch (err) {
+    return { success: true, data: calf, error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+export async function deleteCalf(id: string): Promise<{ success: boolean; error?: string }> {
+  const localList = getLocalCalves().filter(c => c.id !== id);
+  saveLocalCalves(localList);
+
+  const client = getSupabaseClient();
+  if (!client) return { success: true };
+
+  try {
+    const { error } = await client.from('calves').delete().eq('id', id);
+    if (error) return { success: true, error: error.message };
+    return { success: true };
+  } catch (err) {
+    return { success: true, error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+// -----------------------------------------------------------------------------
+// Cow Breeding & Pregnancy Records Persistence
+// -----------------------------------------------------------------------------
+
+export function getLocalBreedingRecords(): CowBreedingRecord[] {
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY_BREEDING);
+    if (!stored) {
+      const initial = generateSampleBreedingRecords();
+      localStorage.setItem(STORAGE_KEY_BREEDING, JSON.stringify(initial));
+      return initial;
+    }
+    return JSON.parse(stored) as CowBreedingRecord[];
+  } catch {
+    return generateSampleBreedingRecords();
+  }
+}
+
+export function saveLocalBreedingRecords(records: CowBreedingRecord[]): void {
+  localStorage.setItem(STORAGE_KEY_BREEDING, JSON.stringify(records));
+}
+
+export async function fetchBreedingRecords(): Promise<{ data: CowBreedingRecord[]; isLocal: boolean; error?: string }> {
+  const client = getSupabaseClient();
+  if (!client) return { data: getLocalBreedingRecords(), isLocal: true };
+
+  try {
+    const { data, error } = await client.from('cow_breeding').select('*').order('last_calving_date', { ascending: false });
+    if (error) return { data: getLocalBreedingRecords(), isLocal: true, error: error.message };
+    if (!data || data.length === 0) {
+      return { data: getLocalBreedingRecords(), isLocal: true };
+    }
+    return {
+      data: (data ?? []).map(row => ({
+        ...row,
+        id: String(row.id),
+      })) as CowBreedingRecord[],
+      isLocal: false,
+    };
+  } catch (err) {
+    return {
+      data: getLocalBreedingRecords(),
+      isLocal: true,
+      error: err instanceof Error ? err.message : String(err),
+    };
+  }
+}
+
+export async function saveBreedingRecord(
+  input: CowBreedingInput
+): Promise<{ success: boolean; data?: CowBreedingRecord; error?: string }> {
+  const now = new Date().toISOString();
+  const localList = getLocalBreedingRecords();
+  const existing = input.id ? localList.find(b => b.id === input.id) : localList.find(b => b.cow_id === input.cow_id);
+
+  const record: CowBreedingRecord = {
+    id: input.id || existing?.id || `breed-${input.cow_id}-${Date.now()}`,
+    cow_id: input.cow_id,
+    last_calving_date: input.last_calving_date,
+    status: input.status,
+    last_heat_date: input.last_heat_date,
+    ai_date: input.ai_date,
+    ai_sire_code: input.ai_sire_code,
+    ai_technician: input.ai_technician,
+    pd_date: input.pd_date,
+    is_pregnant: input.is_pregnant ?? (input.status === 'confirmed_pregnant'),
+    expected_calving_date: input.expected_calving_date,
+    expected_dry_date: input.expected_dry_date,
+    next_heat_expected_date: input.next_heat_expected_date,
+    notes: input.notes,
+    created_at: existing?.created_at || now,
+    updated_at: now,
+  };
+
+  const existingIdx = localList.findIndex(b => b.id === record.id || b.cow_id === record.cow_id);
+  if (existingIdx >= 0) localList[existingIdx] = record;
+  else localList.unshift(record);
+  saveLocalBreedingRecords(localList);
+
+  const client = getSupabaseClient();
+  if (!client) {
+    return { success: true, data: record };
+  }
+
+  try {
+    const { data, error } = await client.from('cow_breeding').upsert(record).select('*').single();
+    if (error) return { success: true, data: record, error: error.message };
+    return { success: true, data: data as CowBreedingRecord };
+  } catch (err) {
+    return { success: true, data: record, error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+export async function deleteBreedingRecord(id: string): Promise<{ success: boolean; error?: string }> {
+  const localList = getLocalBreedingRecords().filter(b => b.id !== id);
+  saveLocalBreedingRecords(localList);
+
+  const client = getSupabaseClient();
+  if (!client) return { success: true };
+
+  try {
+    const { error } = await client.from('cow_breeding').delete().eq('id', id);
+    if (error) return { success: true, error: error.message };
+    return { success: true };
+  } catch (err) {
+    return { success: true, error: err instanceof Error ? err.message : String(err) };
+  }
 }
 
 export async function fetchCowCollection(): Promise<{ cows: CowProfileRecord[]; records: CowMilkRecord[]; error?: string }> {
