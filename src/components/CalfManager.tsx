@@ -38,7 +38,6 @@ import {
   deleteCalf,
   fetchBreedingRecords,
   saveBreedingRecord,
-  fetchCowCollection,
 } from '../lib/supabase';
 import {
   CALF_STAGES,
@@ -50,7 +49,6 @@ import {
   analyzeReproductionCycle,
   getCalfFeedingGuide,
 } from '../lib/calfData';
-import { COW_GROUPS } from '../lib/cowGroupData';
 
 type ActiveTab = 'calves' | 'mothers' | 'breeding' | 'feeding';
 
@@ -58,8 +56,11 @@ export const CalfManager: React.FC = () => {
   const [activeTab, setActiveTab] = useState<ActiveTab>('calves');
   const [calves, setCalves] = useState<CalfRecord[]>([]);
   const [breedingRecords, setBreedingRecords] = useState<CowBreedingRecord[]>([]);
-  const [cowList, setCowList] = useState<string[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
+  const cowList = useMemo(() => Array.from(new Set([
+    ...calves.map(calf => calf.mother_id),
+    ...breedingRecords.map(record => record.cow_id),
+  ].filter(Boolean))).sort(), [calves, breedingRecords]);
 
   // Filters for Calves Directory
   const [searchQuery, setSearchQuery] = useState('');
@@ -77,7 +78,7 @@ export const CalfManager: React.FC = () => {
   // Form State - Calf
   const [formTag, setFormTag] = useState('');
   const [formName, setFormName] = useState('');
-  const [formMotherId, setFormMotherId] = useState('G1');
+  const [formMotherId, setFormMotherId] = useState('');
   const [formGender, setFormGender] = useState<CalfGender>('female');
   const [formBreed, setFormBreed] = useState(CALF_BREEDS[0]);
   const [formDob, setFormDob] = useState(format(new Date(), 'yyyy-MM-dd'));
@@ -96,7 +97,7 @@ export const CalfManager: React.FC = () => {
   const [isSaving, setIsSaving] = useState(false);
 
   // Form State - Breeding
-  const [bFormCowId, setBFormCowId] = useState('G1');
+  const [bFormCowId, setBFormCowId] = useState('');
   const [bFormLastCalvingDate, setBFormLastCalvingDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [bFormStatus, setBFormStatus] = useState<CowBreedingStatus>('resting');
   const [bFormLastHeatDate, setBFormLastHeatDate] = useState('');
@@ -114,18 +115,14 @@ export const CalfManager: React.FC = () => {
   const loadAllData = useCallback(async () => {
     setLoading(true);
     try {
-      const [calvesRes, breedRes, cowsRes] = await Promise.all([
+      const [calvesRes, breedRes] = await Promise.all([
         fetchCalves(),
         fetchBreedingRecords(),
-        fetchCowCollection(),
       ]);
 
       setCalves(calvesRes.data);
       setBreedingRecords(breedRes.data);
 
-      const dbCows = (cowsRes.cows ?? []).map(c => c.name);
-      const combinedCows = Array.from(new Set([...COW_GROUPS, ...dbCows])).sort();
-      setCowList(combinedCows);
     } finally {
       setLoading(false);
     }
@@ -207,9 +204,9 @@ export const CalfManager: React.FC = () => {
   // Handle open calf modal
   const handleOpenAddCalf = (defaultMother?: string) => {
     setEditingCalf(null);
-    setFormTag(`CLF-${(defaultMother || 'G1')}-${String(calves.length + 1).padStart(2, '0')}`);
+    setFormTag(`CLF-${(defaultMother || 'NEW')}-${String(calves.length + 1).padStart(2, '0')}`);
     setFormName('');
-    setFormMotherId(defaultMother || (cowList[0] ?? 'G1'));
+    setFormMotherId(defaultMother || '');
     setFormGender('female');
     setFormBreed(CALF_BREEDS[0]);
     setFormDob(format(new Date(), 'yyyy-MM-dd'));
@@ -307,7 +304,7 @@ export const CalfManager: React.FC = () => {
 
   // Handle open breeding modal
   const handleOpenBreedingModal = (cowId?: string) => {
-    const targetCow = cowId || (cowList[0] ?? 'G1');
+    const targetCow = cowId || '';
     const existing = breedingRecords.find(b => b.cow_id === targetCow);
 
     setEditingBreeding(existing || null);
@@ -1245,15 +1242,14 @@ export const CalfManager: React.FC = () => {
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                 <div>
                   <label className="text-xs font-semibold text-ink-700">Mother Cow *</label>
-                  <select
+                  <input
+                    type="text"
+                    required
                     value={formMotherId}
                     onChange={e => setFormMotherId(e.target.value)}
+                    placeholder="Enter cow name or tag"
                     className="mt-1 w-full rounded-lg border border-ink-200 px-3 py-2 text-sm focus:border-forest-600 focus:outline-none"
-                  >
-                    {cowList.map(c => (
-                      <option key={c} value={c}>Cow {c}</option>
-                    ))}
-                  </select>
+                  />
                 </div>
 
                 <div>
@@ -1480,7 +1476,9 @@ export const CalfManager: React.FC = () => {
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div>
                   <label className="text-xs font-semibold text-ink-700">Cow *</label>
-                  <select
+                  <input
+                    type="text"
+                    required
                     value={bFormCowId}
                     onChange={e => {
                       const cid = e.target.value;
@@ -1498,12 +1496,9 @@ export const CalfManager: React.FC = () => {
                         setBFormNotes(rec.notes || '');
                       }
                     }}
+                    placeholder="Enter cow name or tag"
                     className="mt-1 w-full rounded-lg border border-ink-200 px-3 py-2 text-sm focus:border-forest-600 focus:outline-none"
-                  >
-                    {cowList.map(c => (
-                      <option key={c} value={c}>Cow {c}</option>
-                    ))}
-                  </select>
+                  />
                 </div>
 
                 <div>
