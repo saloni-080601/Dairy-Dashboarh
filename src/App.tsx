@@ -6,7 +6,7 @@ import { StatCard } from './components/StatCard';
 import { DailyEntrySection } from './components/DailyEntrySection';
 import { DailySummaryCard } from './components/DailySummaryCard';
 import { TenDayPeriodCard } from './components/TenDayPeriodCard';
-import { TenDayStatCard, OverviewTenDayGroups } from './components/OverviewTenDayGroups';
+import { OverviewTenDayGroups } from './components/OverviewTenDayGroups';
 import { RecordsTable } from './components/RecordsTable';
 import { AnalyticsCharts } from './components/AnalyticsCharts';
 import { PrintableBillModal } from './components/PrintableBillModal';
@@ -26,6 +26,7 @@ import {
   Coins,
   Gauge,
   CalendarDays,
+  Wallet,
   BarChart3,
   ClipboardList,
   CalendarRange,
@@ -49,9 +50,9 @@ const RecordsBillingPage: React.FC<RecordsBillingPageProps> = ({
   const [tab, setTab] = useState<'ten-day' | 'records' | 'monthly'>('ten-day');
 
   const tabs = [
-    { id: 'ten-day' as const, label: '10-day billing', icon: CalendarDays },
-    { id: 'records' as const, label: 'Milk records', icon: ClipboardList },
-    { id: 'monthly' as const, label: 'Monthly report', icon: CalendarRange },
+    { id: 'ten-day' as const, label: '10-day bill', icon: CalendarDays },
+    { id: 'records' as const, label: 'Daily records', icon: ClipboardList },
+    { id: 'monthly' as const, label: 'Monthly total', icon: CalendarRange },
   ];
 
   return (
@@ -101,8 +102,7 @@ function getSectionFromPath(pathname: string): string {
 }
 
 const OverviewPage: React.FC<OverviewPageProps> = ({ onOpenBillForPeriod }) => {
-  const { selectedDayRecord, dailyRecords, selectedDate } = useDairy();
-  const [tab, setTab] = useState<'summary' | 'analytics'>('summary');
+  const { dailyRecords, selectedDate } = useDairy();
   const lifetimeRevenue = useMemo(() => {
     const total = dailyRecords.reduce((sum, record) => sum + (record.totalAmount ?? 0), 0);
     const firstRecordDate = dailyRecords.reduce<string | null>(
@@ -155,7 +155,7 @@ const OverviewPage: React.FC<OverviewPageProps> = ({ onOpenBillForPeriod }) => {
 
       return buildPeriodObject(
         `${monthKey}-c${cycle}`,
-        `Cycle ${cycle}: ${range} ${format(monthStart, 'MMM yyyy')}`,
+        `${range} ${format(monthStart, 'MMM yyyy')}`,
         cycle,
         startDate,
         endDate,
@@ -164,78 +164,113 @@ const OverviewPage: React.FC<OverviewPageProps> = ({ onOpenBillForPeriod }) => {
     });
   }, [dailyRecords, monthKey, monthStart, daysInMonth]);
 
+  const monthSummary = useMemo(() => {
+    return currentMonthPeriods.reduce(
+      (sum, period) => ({
+        litres: sum.litres + period.totalQuantity,
+        amount: sum.amount + period.totalAmount,
+        days: sum.days + period.daysWithEntries,
+      }),
+      { litres: 0, amount: 0, days: 0 }
+    );
+  }, [currentMonthPeriods]);
+
+  const recordDays = dailyRecords.length;
+  const averagePerDay = recordDays ? lifetimeRevenue.total / recordDays : 0;
+  const monthRate = monthSummary.litres ? monthSummary.amount / monthSummary.litres : 0;
+
   return (
-    <div className="space-y-5">
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-5">
-        <StatCard
-          title="Today's milk"
-          value={selectedDayRecord?.totalQuantity ?? 0}
-          unit="L"
-          subtitle={`AM ${selectedDayRecord?.morning?.quantity ?? 0} L · PM ${selectedDayRecord?.evening?.quantity ?? 0} L`}
-          icon={<Droplets className="h-4 w-4" />}
-        />
-        <StatCard
-          title="Today's earning"
-          value={`₹${(selectedDayRecord?.totalAmount ?? 0).toLocaleString('en-IN')}`}
-          subtitle={`AM ₹${(selectedDayRecord?.morning?.amount ?? 0).toLocaleString('en-IN')} · PM ₹${(selectedDayRecord?.evening?.amount ?? 0).toLocaleString('en-IN')}`}
-          icon={<Coins className="h-4 w-4" />}
-        />
-        <StatCard
-          title="Avg rate / litre"
-          value={selectedDayRecord?.avgRate ? `₹${selectedDayRecord.avgRate.toFixed(2)}` : '₹0.00'}
-          subtitle={`Fat ${selectedDayRecord?.avgFat ?? 0}% · CLR ${selectedDayRecord?.avgClr ?? 0}`}
-          icon={<Gauge className="h-4 w-4" />}
-        />
-        <StatCard
-          title="Total revenue"
-          value={`₹${lifetimeRevenue.total.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
-          subtitle={lifetimeRevenue.firstRecordDate
-            ? `All time · Since ${format(parseISO(lifetimeRevenue.firstRecordDate), 'dd MMM yyyy')}`
-            : 'All recorded milk entries'}
-          icon={<Coins className="h-4 w-4" />}
-        />
-        <TenDayStatCard
+    <div className="space-y-8">
+      <section className="space-y-3" aria-labelledby="today-heading">
+        <div>
+          <h3 id="today-heading" className="text-sm font-semibold text-ink-900">Today</h3>
+          <p className="text-xs text-ink-500">One day, with morning and evening side by side. The list below is every batch saved for that day.</p>
+        </div>
+        <DailySummaryCard />
+      </section>
+
+      <section className="space-y-3" aria-labelledby="month-heading">
+        <div>
+          <h3 id="month-heading" className="text-sm font-semibold text-ink-900">This month · {monthLabel}</h3>
+          <p className="text-xs text-ink-500">Payment is split into three cycles: 1–10, 11–20, and 21 through the end of the month.</p>
+        </div>
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <StatCard
+            title="Month milk"
+            value={monthSummary.litres.toLocaleString('en-IN')}
+            unit="L"
+            subtitle={`${monthSummary.days} collection days`}
+            icon={<Droplets className="h-4 w-4" />}
+          />
+          <StatCard
+            title="Month money"
+            value={`₹${monthSummary.amount.toLocaleString('en-IN')}`}
+            subtitle="All three cycles combined"
+            icon={<Coins className="h-4 w-4" />}
+          />
+          <StatCard
+            title="Average price"
+            value={monthRate ? `₹${monthRate.toFixed(2)}` : '₹0.00'}
+            subtitle="Per litre this month"
+            icon={<Gauge className="h-4 w-4" />}
+          />
+          <StatCard
+            title="Cycle for this date"
+            value={todayCycle === 1 ? '1–10' : todayCycle === 2 ? '11–20' : `21–${daysInMonth}`}
+            subtitle={`${monthShort} · cycle ${todayCycle} of 3`}
+            icon={<CalendarDays className="h-4 w-4" />}
+          />
+        </div>
+        <OverviewTenDayGroups
           periods={currentMonthPeriods}
           selectedCycle={selectedCycle}
           onSelectCycle={setSelectedCycle}
           daysInMonth={daysInMonth}
+          monthLabel={monthLabel}
           monthShort={monthShort}
           activeCycle={todayCycle}
+          onOpenBillForPeriod={onOpenBillForPeriod}
         />
-      </div>
+      </section>
 
-      <OverviewTenDayGroups
-        periods={currentMonthPeriods}
-        selectedCycle={selectedCycle}
-        onSelectCycle={setSelectedCycle}
-        daysInMonth={daysInMonth}
-        monthLabel={monthLabel}
-        monthShort={monthShort}
-        activeCycle={todayCycle}
-        onOpenBillForPeriod={onOpenBillForPeriod}
-      />
+      <section className="space-y-3" aria-labelledby="all-records-heading">
+        <div>
+          <h3 id="all-records-heading" className="text-sm font-semibold text-ink-900">All records</h3>
+          <p className="text-xs text-ink-500">
+            {lifetimeRevenue.firstRecordDate
+              ? `Everything saved since ${format(parseISO(lifetimeRevenue.firstRecordDate), 'd MMM yyyy')}.`
+              : 'Totals appear here after the first collection is saved.'}
+          </p>
+        </div>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <StatCard
+            title="Total earned"
+            value={`₹${lifetimeRevenue.total.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+            subtitle="Milk income only"
+            icon={<Wallet className="h-4 w-4" />}
+          />
+          <StatCard
+            title="Days recorded"
+            value={recordDays}
+            subtitle="Days with at least one entry"
+            icon={<CalendarDays className="h-4 w-4" />}
+          />
+          <StatCard
+            title="Average per day"
+            value={`₹${averagePerDay.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`}
+            subtitle="Total earned ÷ days recorded"
+            icon={<Coins className="h-4 w-4" />}
+          />
+        </div>
+      </section>
 
-      <div className="flex w-full gap-1 rounded-lg bg-ink-100 p-1 sm:w-auto sm:inline-flex">
-        <button
-          onClick={() => setTab('summary')}
-          className={`flex flex-1 items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold transition sm:flex-none ${
-            tab === 'summary' ? 'bg-white text-ink-900 shadow-sm' : 'text-ink-500 hover:text-ink-800'
-          }`}
-        >
-          Daily summary
-        </button>
-        <button
-          onClick={() => setTab('analytics')}
-          className={`flex flex-1 items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold transition sm:flex-none ${
-            tab === 'analytics' ? 'bg-white text-ink-900 shadow-sm' : 'text-ink-500 hover:text-ink-800'
-          }`}
-        >
-          Analytics
-        </button>
-      </div>
-
-      {tab === 'summary' && <DailySummaryCard />}
-      {tab === 'analytics' && <AnalyticsCharts />}
+      <section className="space-y-3" aria-labelledby="trend-heading">
+        <div>
+          <h3 id="trend-heading" className="text-sm font-semibold text-ink-900">Recent trend</h3>
+          <p className="text-xs text-ink-500">The last 12 recorded days, morning and evening kept apart.</p>
+        </div>
+        <AnalyticsCharts />
+      </section>
     </div>
   );
 };
@@ -349,23 +384,23 @@ const DashboardContent: React.FC = () => {
   };
 
   const sectionLinks = [
-    { id: 'daily-entry', label: 'Daily collection', icon: Droplets },
-    { id: 'cow-groups', label: 'Cow group data', icon: Users },
-    { id: 'calves', label: 'Calves & Breeding', icon: Baby },
-    { id: 'records', label: 'Records & billing', icon: BarChart3 },
-    { id: 'expenses', label: 'Expenses', icon: Receipt },
-    { id: 'overview', label: 'Overview', icon: Home },
+    { id: 'daily-entry', label: 'Add milk', short: 'Milk', icon: Droplets },
+    { id: 'cow-groups', label: 'Cows & buffaloes', short: 'Animals', icon: Users },
+    { id: 'calves', label: 'Calves', short: 'Calves', icon: Baby },
+    { id: 'records', label: 'Bills & records', short: 'Bills', icon: BarChart3 },
+    { id: 'expenses', label: 'Expenses', short: 'Costs', icon: Receipt },
+    { id: 'overview', label: 'Today', short: 'Today', icon: Home },
   ].filter(section => isAdmin || ENTRY_SECTIONS.has(section.id));
 
   const currentSection = isAdmin || ENTRY_SECTIONS.has(activeSection) ? activeSection : 'daily-entry';
 
   const pageTitles: Record<string, { title: string; subtitle: string }> = {
-    'daily-entry': { title: 'Daily collection', subtitle: 'Enter quantity, fat and CLR. Rate is calculated automatically.' },
-    overview: { title: 'Overview', subtitle: 'Today’s milk, earnings and quality at a glance.' },
-    records: { title: 'Records & billing', subtitle: 'History, 10-day cycles and monthly totals.' },
-    'cow-groups': { title: 'Cow group data', subtitle: 'Group-wise morning and evening milk records.' },
-    calves: { title: 'Calves & Breeding Management', subtitle: 'Track offspring, calf feeding, heat cycles, and expected calving dates.' },
-    expenses: { title: 'Dairy & Cow Expenses', subtitle: 'Track cattle feed, healthcare, AI breeding, and dairy operational costs vs revenue.' },
+    'daily-entry': { title: 'Daily milk', subtitle: 'Enter litres, fat, and lactometer reading. The price is calculated for you.' },
+    overview: { title: 'Today', subtitle: 'Start with this day, then the month’s three bills, then everything recorded so far.' },
+    records: { title: 'Bills and records', subtitle: '10-day bill, day-by-day records, and the monthly total.' },
+    'cow-groups': { title: 'Cows and buffaloes', subtitle: 'Milk from each animal, morning and evening kept separate.' },
+    calves: { title: 'Calves', subtitle: 'Calf name, mother, pregnancy, and date of birth.' },
+    expenses: { title: 'Expenses', subtitle: 'Feed, medicine, and other costs, next to milk income.' },
   };
 
   return (
@@ -384,7 +419,7 @@ const DashboardContent: React.FC = () => {
           className="-mx-3 mb-4 flex gap-1 overflow-x-auto border-y border-ink-200 bg-white p-1 sm:mx-0 sm:mb-6 sm:rounded-xl sm:border lg:hidden"
           aria-label="Dashboard pages"
         >
-          {sectionLinks.map(({ id, label, icon: Icon }) => (
+          {sectionLinks.map(({ id, short, icon: Icon }) => (
             <button
               key={id}
               onClick={() => navigateToSection(id)}
@@ -393,7 +428,7 @@ const DashboardContent: React.FC = () => {
               }`}
             >
               <Icon className="h-4 w-4" />
-              {label}
+              {short}
             </button>
           ))}
         </div>
@@ -403,7 +438,7 @@ const DashboardContent: React.FC = () => {
             className="sticky top-24 hidden w-56 shrink-0 flex-col rounded-xl border border-ink-200/80 bg-white p-3 shadow-panel lg:flex"
             aria-label="Dashboard page navigation"
           >
-            <p className="px-3 pb-2 pt-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-ink-400">Workspace</p>
+            <p className="px-3 pb-2 pt-1 text-xs font-semibold text-ink-400">Pages</p>
             <nav className="space-y-0.5">
               {sectionLinks.map(({ id, label, icon: Icon }) => (
                 <button
@@ -420,12 +455,12 @@ const DashboardContent: React.FC = () => {
             {isAdmin && (
               <>
                 <div className="my-3 border-t border-ink-100" />
-                <p className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-ink-400">Rates</p>
+                <p className="px-3 pb-1 text-xs font-semibold text-ink-400">Rate</p>
                 <button onClick={() => setShowChartModal(true)} className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-semibold text-ink-600 hover:bg-ink-50">
-                  <FileText className="h-4 w-4 shrink-0" />Rate charts
+                  <FileText className="h-4 w-4 shrink-0" />Rate chart
                 </button>
                 <button onClick={() => setShowSettingsModal(true)} className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-semibold text-ink-600 hover:bg-ink-50">
-                  <Settings2 className="h-4 w-4 shrink-0" />Rate formula
+                  <Settings2 className="h-4 w-4 shrink-0" />Price formula
                 </button>
               </>
             )}
@@ -469,7 +504,7 @@ const DashboardContent: React.FC = () => {
       <footer className="no-print border-t border-ink-200 bg-white py-4 text-center text-xs text-ink-400">
         <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-2 px-4 sm:flex-row">
           <p>© {new Date().getFullYear()} DairyFlow</p>
-          <p>Collection, rates and billing in one desk</p>
+          <p>Milk, price, and bills in one place</p>
         </div>
       </footer>
 

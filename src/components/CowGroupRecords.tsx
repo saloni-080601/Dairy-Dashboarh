@@ -361,7 +361,7 @@ export const CowGroupRecords: React.FC = () => {
     const name = cowName.trim().toUpperCase();
     if (!name) return;
     if (cows.some(cow => cow.name.toLowerCase() === name.toLowerCase())) {
-      setFormMessage('Ye cow pehle se added hai.');
+      setFormMessage('This cow is already added.');
       return;
     }
     setIsSaving(true);
@@ -377,20 +377,20 @@ export const CowGroupRecords: React.FC = () => {
     setSelectedCow(newCow.name);
     setCowName('');
     setShowAddCow(false);
-    setFormMessage(`${newCow.name} successfully add ho gayi.`);
+    setFormMessage(`${newCow.name} was added.`);
   };
 
   const saveCowMilk = async (event: React.FormEvent) => {
     event.preventDefault();
     const milkQuantity = Number(quantity);
     if (!Number.isFinite(milkQuantity) || milkQuantity <= 0) {
-      setFormMessage('Milk quantity 0 se zyada enter karein.');
+      setFormMessage('Enter a milk quantity greater than 0.');
       return;
     }
 
     const targetCow = cows.find(cow => cow.id === entryCowId);
     if (!targetCow) {
-      setFormMessage('Pehle cow select karein.');
+      setFormMessage('Select a cow first.');
       return;
     }
 
@@ -430,7 +430,7 @@ export const CowGroupRecords: React.FC = () => {
 
     setSelectedCow(targetCow.name);
     setQuantity('');
-    setFormMessage(`${targetCow.name} ka ${entrySession} milk (${milkQuantity} L) save ho gaya.`);
+    setFormMessage(`Saved ${milkQuantity} L of ${entrySession} milk for ${targetCow.name}.`);
   };
 
   const handleQuickAddSession = (cow: CowProfile, session: 'morning' | 'evening', existingQty?: number | null) => {
@@ -443,7 +443,7 @@ export const CowGroupRecords: React.FC = () => {
   };
 
   const handleDeleteRecord = async (cowId: string, date: string, session: 'morning' | 'evening') => {
-    if (!window.confirm(`Kya aap ye ${session} record delete karna chahte hain?`)) return;
+    if (!window.confirm(`Delete this ${session} record?`)) return;
 
     setCowRecords(current => {
       const updated = current.filter(
@@ -457,7 +457,7 @@ export const CowGroupRecords: React.FC = () => {
     if (client) {
       await client.from('cow_milk_records').delete().match({ cow_id: cowId, date, session });
     }
-    setFormMessage('Record delete ho gaya.');
+    setFormMessage('Record deleted.');
   };
 
   const handlePrevDay = () => {
@@ -517,7 +517,7 @@ export const CowGroupRecords: React.FC = () => {
 
       {loadError && (
         <div role="alert" className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-xs text-amber-800">
-          Supabase sync note: {loadError}. Local cache mode active hai, aapka data browser me safely save rahega.
+          Could not sync with Supabase: {loadError}. A local copy is being used in this browser.
         </div>
       )}
 
@@ -717,7 +717,7 @@ export const CowGroupRecords: React.FC = () => {
                     {formMessage ? (
                       <span
                         className={`font-semibold ${
-                          formMessage.includes('nahi') || formMessage.includes('error')
+                          formMessage.includes('already') || formMessage.startsWith('Enter') || formMessage.startsWith('Select') || formMessage.includes('error')
                             ? 'text-red-600'
                             : 'text-forest-800'
                         }`}
@@ -968,7 +968,7 @@ export const CowGroupRecords: React.FC = () => {
                   {dailyCowCollection.length === 0 && (
                     <tr>
                       <td colSpan={7} className="px-4 py-8 text-center text-ink-400">
-                        Koi cow add nahi hui hai. Upar Add Cow par click karein.
+                        No cows yet. Use Add cow above to create the first one.
                       </td>
                     </tr>
                   )}
@@ -1016,7 +1016,7 @@ export const CowGroupRecords: React.FC = () => {
                     Cow Lifetime Performance &amp; Revenue
                   </p>
                   <h3 className="text-base font-semibold tracking-tight text-ink-900">
-                    {selectedCow} Collection &amp; Revenue Totals (Starting Se Ab Tak)
+                    {selectedCow} collection and revenue
                   </h3>
                 </div>
                 <div className="self-start sm:self-auto rounded-lg bg-ink-100 px-2.5 py-1 text-xs font-mono font-medium text-ink-700">
@@ -1024,7 +1024,7 @@ export const CowGroupRecords: React.FC = () => {
                 </div>
               </div>
               <p className="text-xs text-ink-500">
-                All-months milk records ke average rate (₹{overallAvgRate.toFixed(2)}/L) ke aadhar par {selectedCow} ka kul doodh aur revenue:
+                Totals for {selectedCow} use the average rate across every saved month (₹{overallAvgRate.toFixed(2)}/L).
               </p>
             </div>
 
@@ -1212,7 +1212,7 @@ export const CowGroupRecords: React.FC = () => {
                   {historyRows.length === 0 && (
                     <tr>
                       <td colSpan={5} className="px-4 py-10 text-center text-ink-400">
-                        Is month ke liye koi collection records nahi hain.
+                        No collection records for this month.
                       </td>
                     </tr>
                   )}

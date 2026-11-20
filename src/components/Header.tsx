@@ -33,7 +33,7 @@ export const Header: React.FC<HeaderProps> = ({
           <div className="min-w-0">
             <h1 className="text-[15px] font-semibold leading-tight tracking-tight text-ink-900">DairyFlow</h1>
             <p className="truncate text-xs text-ink-500">
-              {rateSettings.dairy_name || 'Collection desk'}
+              {rateSettings.dairy_name || 'Milk desk'}
               {rateSettings.center_code ? ` · ${rateSettings.center_code}` : ''}
             </p>
           </div>
@@ -42,7 +42,7 @@ export const Header: React.FC<HeaderProps> = ({
         <div className="flex shrink-0 items-center gap-1.5">
           <span className="hidden max-w-36 truncate text-xs text-ink-500 md:block" title={userEmail}>{userEmail}</span>
           <button onClick={onLogout} className="rounded-lg border border-ink-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-ink-700 hover:bg-ink-50 sm:px-3" title="Logout">
-            Logout
+            Log out
           </button>
 
           {isAdmin && (

@@ -351,7 +351,11 @@ export const CalfManager: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      {/* Top Banner & KPI Cards */}
+      {/* Herd Overview */}
+      <div>
+        <h3 className="text-sm font-bold text-ink-900">Herd Overview</h3>
+        <p className="text-xs text-ink-500">Calf counts, daily milk feeding, and breeding status at a glance.</p>
+      </div>
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
         <div className="rounded-xl border border-sky-100 bg-sky-50/70 p-3 shadow-panel">
           <div className="flex items-center gap-2 text-sky-700">
@@ -359,7 +363,7 @@ export const CalfManager: React.FC = () => {
             <span className="text-xs font-semibold">Total Calves</span>
           </div>
           <div className="mt-2 text-2xl font-bold text-sky-950">{stats.total}</div>
-          <p className="text-[11px] text-sky-600">Total Calves</p>
+          <p className="text-[11px] text-sky-600">All calf records</p>
         </div>
 
         <div className="rounded-xl border border-purple-100 bg-purple-50/70 p-3 shadow-panel">
@@ -368,7 +372,7 @@ export const CalfManager: React.FC = () => {
             <span className="text-xs font-semibold">Female Heifers</span>
           </div>
           <div className="mt-2 text-2xl font-bold text-purple-950">{stats.femaleHeifers}</div>
-          <p className="text-[11px] text-purple-600">Female Calves</p>
+          <p className="text-[11px] text-purple-600">Active female calves</p>
         </div>
 
         <div className="rounded-xl border border-amber-100 bg-amber-50/70 p-3 shadow-panel">
@@ -377,16 +381,16 @@ export const CalfManager: React.FC = () => {
             <span className="text-xs font-semibold">Bull Calves</span>
           </div>
           <div className="mt-2 text-2xl font-bold text-amber-950">{stats.maleCalves}</div>
-          <p className="text-[11px] text-amber-600">Male Calves</p>
+          <p className="text-[11px] text-amber-600">Active male calves</p>
         </div>
 
         <div className="rounded-xl border border-blue-100 bg-blue-50/70 p-3 shadow-panel">
           <div className="flex items-center gap-2 text-blue-700">
             <Milk className="h-4 w-4" />
-            <span className="text-xs font-semibold">Milk-Fed</span>
+            <span className="text-xs font-semibold">Milk Fed Daily</span>
           </div>
-          <div className="mt-2 text-2xl font-bold text-blue-950">{stats.milkFed}</div>
-          <p className="text-[11px] text-blue-600">Milk-Fed Calves</p>
+          <div className="mt-2 text-2xl font-bold text-blue-950">{stats.totalDailyMilkFed.toFixed(1)} L</div>
+          <p className="text-[11px] text-blue-600">Across {stats.milkFed} milk-fed calves</p>
         </div>
 
         <div className="rounded-xl border border-emerald-100 bg-emerald-50/70 p-3 shadow-panel">
@@ -395,7 +399,7 @@ export const CalfManager: React.FC = () => {
             <span className="text-xs font-semibold">Ready for AI</span>
           </div>
           <div className="mt-2 text-2xl font-bold text-emerald-950">{stats.readyForAI}</div>
-          <p className="text-[11px] text-emerald-600">Cows Ready for AI</p>
+          <p className="text-[11px] text-emerald-600">Cows ready for insemination</p>
         </div>
 
         <div className="rounded-xl border border-amber-100 bg-amber-50/70 p-3 shadow-panel">

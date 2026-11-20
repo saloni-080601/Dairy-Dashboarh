@@ -29,7 +29,7 @@ export const RateSettingsModal: React.FC<RateSettingsModalProps> = ({ onClose })
     if (success) {
       onClose();
     } else {
-      setSaveError('Settings save nahi ho paayi. Connection check karke dobara try karein.');
+      setSaveError('Settings could not be saved. Check the connection and try again.');
     }
   };
 

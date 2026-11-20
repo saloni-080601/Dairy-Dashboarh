@@ -84,7 +84,7 @@ const SessionForm: React.FC<SessionFormProps> = ({ session, entries, date }) => 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!canSave) {
-      setError('Enter quantity, fat and CLR to save.');
+      setError('Enter litres, fat, and lactometer reading, then save.');
       return;
     }
 
@@ -108,12 +108,12 @@ const SessionForm: React.FC<SessionFormProps> = ({ session, entries, date }) => 
       setShowSavedFeedback(true);
       setTimeout(() => setShowSavedFeedback(false), 2500);
     } else {
-      setError('Could not save this entry. Please try again.');
+      setError('Could not save. Please try again.');
     }
   };
 
-  const handleDelete = async (entry: MilkEntry, index: number) => {
-    if (confirm(`Delete ${session} batch #${index + 1} (${entry.quantity} L)?`)) {
+  const handleDelete = async (entry: MilkEntry) => {
+    if (confirm(`Delete this entry? ${entry.quantity} L`)) {
       if (editingId === entry.id) resetForm();
       await removeEntry(entry.id);
     }
@@ -128,11 +128,11 @@ const SessionForm: React.FC<SessionFormProps> = ({ session, entries, date }) => 
       <form onSubmit={handleSubmit} className="panel p-5 sm:p-6">
         <div className="mb-5 flex items-start justify-between gap-3">
           <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-400">
+            <p className="text-xs font-semibold text-ink-400">
               {editingId ? 'Edit entry' : 'New entry'}
             </p>
             <h3 className="mt-1 text-lg font-semibold text-ink-900">
-              {isMorning ? 'Morning collection' : 'Evening collection'}
+              {isMorning ? 'Morning milk' : 'Evening milk'}
             </h3>
           </div>
           {editingId && (
@@ -163,10 +163,12 @@ const SessionForm: React.FC<SessionFormProps> = ({ session, entries, date }) => 
             </button>
           ))}
         </div>
+        <p className="-mt-3 mb-5 text-xs text-ink-400">Auto picks cow or buffalo from the fat. Choose Cow or Buffalo if you already know.</p>
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <label className="block">
-            <span className="field-label">Quantity</span>
+            <span className="field-label">Milk</span>
+            <span className="field-hint">Litres collected</span>
             <div className="relative">
               <input
                 type="number"
@@ -183,7 +185,8 @@ const SessionForm: React.FC<SessionFormProps> = ({ session, entries, date }) => 
             </div>
           </label>
           <label className="block">
-            <span className="field-label">Fat</span>
+            <span className="field-label">Fat %</span>
+            <span className="field-hint">Fat in the milk</span>
             <div className="relative">
               <input
                 type="number"
@@ -202,6 +205,7 @@ const SessionForm: React.FC<SessionFormProps> = ({ session, entries, date }) => 
           </label>
           <label className="block">
             <span className="field-label">CLR</span>
+            <span className="field-hint">Lactometer reading</span>
             <input
               type="number"
               step="1"
@@ -234,27 +238,27 @@ const SessionForm: React.FC<SessionFormProps> = ({ session, entries, date }) => 
 
       <aside className="panel flex flex-col justify-between p-5">
         <div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-400">Calculated amount</p>
+          <p className="text-xs font-semibold text-ink-400">Amount for this entry</p>
           <p className="mt-3 font-mono text-3xl font-semibold tracking-tight text-ink-900">
             {canSave ? formatRupees(liveAmount) : '₹0.00'}
           </p>
           <p className="mt-2 text-sm text-ink-500">
             {canSave
               ? `₹${liveRate.toFixed(2)} / L · SNF ${liveSnf}% · ${chartLookup.milkType === 'cow' ? 'Cow' : 'Buffalo'}`
-              : 'Fill the three fields to see the rate.'}
+              : 'Fill in litres, fat, and CLR to see the price.'}
           </p>
         </div>
         <div className="mt-6 grid grid-cols-2 gap-3 border-t border-ink-100 pt-4 text-sm">
           <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-ink-400">Session milk</p>
+            <p className="text-xs font-semibold text-ink-400">{isMorning ? 'Morning milk' : 'Evening milk'}</p>
             <p className="mt-1 font-mono font-semibold text-ink-900">{sessionTotalQty.toFixed(1)} L</p>
           </div>
           <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-ink-400">Session total</p>
+            <p className="text-xs font-semibold text-ink-400">Session total</p>
             <p className="mt-1 font-mono font-semibold text-ink-900">{formatRupees(sessionTotalAmount)}</p>
           </div>
           <div className="col-span-2">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-ink-400">Average rate</p>
+            <p className="text-xs font-semibold text-ink-400">Average rate</p>
             <p className="mt-1 font-mono font-semibold text-ink-900">
               {sessionAvgRate > 0 ? `₹${sessionAvgRate.toFixed(2)} / L` : '—'}
             </p>
@@ -264,20 +268,20 @@ const SessionForm: React.FC<SessionFormProps> = ({ session, entries, date }) => 
 
       <div className="panel xl:col-span-2">
         <div className="flex items-center justify-between border-b border-ink-100 px-5 py-3.5">
-          <h4 className="text-sm font-semibold text-ink-900">Saved batches</h4>
-          <span className="text-xs text-ink-500">{entries.length} recorded</span>
+          <h4 className="text-sm font-semibold text-ink-900">Saved for this session</h4>
+          <span className="text-xs text-ink-500">{entries.length} entry</span>
         </div>
         {entries.length === 0 ? (
           <p className="px-5 py-8 text-center text-sm text-ink-400">
-            No batches yet. Enter quantity, fat and CLR, then save.
+            Nothing saved yet. Enter litres, fat, and CLR, then save.
           </p>
         ) : (
           <div className="overflow-x-auto">
             <table className="data-table min-w-[640px]">
               <thead>
                 <tr>
-                  <th>Batch</th>
-                  <th className="text-right">Qty</th>
+                  <th>Entry</th>
+                  <th className="text-right">Milk</th>
                   <th className="text-right">Fat</th>
                   <th className="text-right">CLR</th>
                   <th className="text-right">Rate</th>
@@ -310,7 +314,7 @@ const SessionForm: React.FC<SessionFormProps> = ({ session, entries, date }) => 
                       </button>
                       <button
                         type="button"
-                        onClick={() => handleDelete(entry, idx)}
+                        onClick={() => handleDelete(entry)}
                         className="rounded-md p-1.5 text-ink-400 hover:bg-red-50 hover:text-red-700"
                         title="Delete"
                       >
@@ -351,7 +355,8 @@ export const DailyEntrySection: React.FC = () => {
     <div className="space-y-5">
       <div className="panel flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
         <label className="block min-w-[220px]">
-          <span className="field-label">Collection date</span>
+          <span className="field-label">Date</span>
+          <span className="field-hint">The day this milk was collected</span>
           <input
             type="date"
             value={selectedDate}
@@ -363,7 +368,7 @@ export const DailyEntrySection: React.FC = () => {
         </label>
 
         <div className="flex-1 sm:max-w-md">
-          <span className="field-label">Session</span>
+          <span className="field-label">Morning or evening</span>
           <div className="grid grid-cols-2 gap-1 rounded-lg bg-ink-100 p-1">
             {sessions.map(({ id, label, icon: Icon, qty }) => (
               <button
