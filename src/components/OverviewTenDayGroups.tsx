@@ -124,15 +124,15 @@ export const OverviewTenDayGroups: React.FC<OverviewTenDayGroupsProps> = ({
 }) => {
   return (
     <div className="space-y-3">
-      <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between px-0.5">
+      <div className="flex flex-col gap-1 px-0.5 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-2">
           <CalendarDays className="h-4 w-4 text-forest-800" />
           <h3 className="text-sm font-semibold tracking-tight text-ink-900">
-            10-Day Billing Groups · {monthLabel}
+            Billing cycles · {monthLabel}
           </h3>
         </div>
         <p className="text-xs text-ink-400">
-          Standard 10-day payment cycles (1-10, 11-20, 21-end)
+          Select a cycle to highlight it. The printer opens that cycle’s bill.
         </p>
       </div>
 

@@ -3,7 +3,7 @@ import { format, getDaysInMonth } from 'date-fns';
 import { lookupRateFromChart, calculateChartSNF } from './rateChartData';
 
 export const DEFAULT_RATE_SETTINGS: RateSettings = {
-  setting_name: 'Standard Gaay & Bhains Rate Chart',
+  setting_name: 'Standard cow and buffalo rate chart',
   formula_mode: 'chart', // Default to User's provided Rate Chart!
   base_fat_rate: 6.50,   // ₹6.50 per Fat% unit
   base_snf_rate: 2.00,   // ₹2.00 per SNF% unit

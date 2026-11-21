@@ -19,6 +19,7 @@ import {
   PieChart as PieIcon,
   RefreshCw,
   Sparkles,
+  Milk,
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -54,10 +55,19 @@ import {
 import { COW_GROUPS } from '../lib/cowGroupData';
 
 type FilterPeriod = 'this-month' | 'last-month' | 'last-30-days' | 'all-time' | 'custom';
+type CowMilkUsageRecord = { date: string; quantity: number };
 
 export const ExpensesManager: React.FC = () => {
   const { dailyRecords } = useDairy();
   const [expenses, setExpenses] = useState<DairyExpense[]>([]);
+  const [cowMilkRecords] = useState<CowMilkUsageRecord[]>(() => {
+    try {
+      const records = JSON.parse(localStorage.getItem('dairy_cow_records') || '[]') as CowMilkUsageRecord[];
+      return records.filter(record => record.date && Number.isFinite(Number(record.quantity)));
+    } catch {
+      return [];
+    }
+  });
   const [loading, setLoading] = useState<boolean>(true);
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
   const [editingExpense, setEditingExpense] = useState<DairyExpense | null>(null);
@@ -187,19 +197,29 @@ export const ExpensesManager: React.FC = () => {
     let total = 0;
     let cowTotal = 0;
     let dairyTotal = 0;
+    let productionExpenses = 0;
+    let periodExpenseCount = 0;
 
-    filteredExpenses.forEach(exp => {
-      total += exp.amount;
-      if (exp.category_type === 'cow') {
-        cowTotal += exp.amount;
-      } else {
-        dairyTotal += exp.amount;
+    // Summary totals follow the selected date range, independent of table filters.
+    expenses.forEach(exp => {
+      if (dateInterval) {
+        try {
+          if (!isWithinInterval(parseISO(exp.date), dateInterval)) return;
+        } catch {
+          return;
+        }
       }
+      total += exp.amount;
+      productionExpenses += exp.amount;
+      periodExpenseCount += 1;
+      if (exp.category_type === 'cow') cowTotal += exp.amount;
+      else dairyTotal += exp.amount;
     });
 
     // Milk Revenue for matching period from dailyRecords
     let milkRevenue = 0;
     let milkLitres = 0;
+    const collectedByDate = new Map<string, number>();
     dailyRecords.forEach(rec => {
       if (dateInterval) {
         try {
@@ -207,6 +227,7 @@ export const ExpensesManager: React.FC = () => {
           if (isWithinInterval(rDate, dateInterval)) {
             milkRevenue += rec.totalAmount || 0;
             milkLitres += rec.totalQuantity || 0;
+            collectedByDate.set(rec.date, rec.totalQuantity || 0);
           }
         } catch {
           // ignore
@@ -214,8 +235,32 @@ export const ExpensesManager: React.FC = () => {
       } else {
         milkRevenue += rec.totalAmount || 0;
         milkLitres += rec.totalQuantity || 0;
+        collectedByDate.set(rec.date, rec.totalQuantity || 0);
       }
     });
+
+    // The cow-group total minus collected milk is internal milk use for calves/breeding.
+    const groupProductionByDate = new Map<string, number>();
+    cowMilkRecords.forEach(record => {
+      if (dateInterval) {
+        try {
+          if (!isWithinInterval(parseISO(record.date), dateInterval)) return;
+        } catch {
+          return;
+        }
+      }
+      groupProductionByDate.set(
+        record.date,
+        (groupProductionByDate.get(record.date) || 0) + Number(record.quantity || 0)
+      );
+    });
+    let milkFedLitres = 0;
+    groupProductionByDate.forEach((groupLitres, date) => {
+      milkFedLitres += Math.max(0, groupLitres - (collectedByDate.get(date) || 0));
+    });
+    milkFedLitres = Number(milkFedLitres.toFixed(2));
+    const productionMilkLitres = milkLitres + milkFedLitres;
+    const productionCostPerLitre = productionMilkLitres > 0 ? productionExpenses / productionMilkLitres : 0;
 
     const netProfit = milkRevenue - total;
     const profitMargin = milkRevenue > 0 ? (netProfit / milkRevenue) * 100 : 0;
@@ -228,13 +273,18 @@ export const ExpensesManager: React.FC = () => {
       dairyTotal,
       milkRevenue,
       milkLitres,
+      milkFedLitres,
+      productionMilkLitres,
+      productionCostPerLitre,
+      calfMilkCost: productionCostPerLitre * milkFedLitres,
+      productionExpenses,
       netProfit,
       profitMargin,
       cowPercentage,
       dairyPercentage,
-      count: filteredExpenses.length,
+      count: periodExpenseCount,
     };
-  }, [filteredExpenses, dailyRecords, dateInterval]);
+  }, [expenses, dailyRecords, dateInterval, cowMilkRecords]);
 
   // Subcategory Breakdown for Bar Chart
   const subcategoryChartData = useMemo(() => {
@@ -472,13 +522,17 @@ export const ExpensesManager: React.FC = () => {
         </div>
       )}
 
-      {/* KPI Stat Cards */}
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <section className="space-y-3">
+        <div>
+          <h4 className="text-sm font-bold text-ink-900">Recorded Expenses</h4>
+          <p className="text-xs text-ink-500">Cash expenses saved for the selected period.</p>
+        </div>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {/* Total Expense */}
         <div className="relative overflow-hidden rounded-xl border border-red-200/80 bg-white p-4 shadow-panel">
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-bold uppercase tracking-wider text-ink-500">
-              Total Expenses
+              Cash Expenses
             </span>
             <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-red-50 text-red-600">
               <TrendingDown className="h-4 w-4" />
@@ -536,7 +590,15 @@ export const ExpensesManager: React.FC = () => {
           </p>
           <div className="absolute bottom-0 left-0 right-0 h-1 bg-sky-600" />
         </div>
+        </div>
+      </section>
 
+      <section className="space-y-3">
+        <div>
+          <h4 className="text-sm font-bold text-ink-900">Milk Production & Use</h4>
+          <p className="text-xs text-ink-500">Production includes collected milk and the milk retained for calves.</p>
+        </div>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {/* Net Profit & Revenue */}
         <div className={`relative overflow-hidden rounded-xl border bg-white p-4 shadow-panel ${
           metrics.netProfit >= 0 ? 'border-forest-200/80' : 'border-rose-200/80'
@@ -559,13 +621,64 @@ export const ExpensesManager: React.FC = () => {
             </span>
           </div>
           <p className="mt-1 text-xs text-ink-500">
-            Milk Sales: ₹{metrics.milkRevenue.toLocaleString('en-IN')} ({metrics.profitMargin.toFixed(0)}% margin)
+            Collected milk sales: ₹{metrics.milkRevenue.toLocaleString('en-IN')} · {metrics.profitMargin.toFixed(0)}% margin
           </p>
           <div className={`absolute bottom-0 left-0 right-0 h-1 ${
             metrics.netProfit >= 0 ? 'bg-forest-600' : 'bg-rose-500'
           }`} />
         </div>
+
+        {/* Production Cost per Litre */}
+        <div className="relative overflow-hidden rounded-xl border border-amber-200/80 bg-white p-4 shadow-panel">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-amber-800">
+              Production Cost / Litre
+            </span>
+            <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-amber-50 text-amber-700">
+              <Coins className="h-4 w-4" />
+            </span>
+          </div>
+          <div className="mt-2 flex items-baseline gap-1">
+            <span className="text-2xl font-black tracking-tight text-amber-950 sm:text-3xl">
+              {metrics.productionMilkLitres > 0 ? `₹${metrics.productionCostPerLitre.toFixed(2)}` : '—'}
+            </span>
+            {metrics.productionMilkLitres > 0 && <span className="text-xs text-ink-500">/L</span>}
+          </div>
+          <p className="mt-1 text-xs text-ink-500">
+            ₹{metrics.productionExpenses.toLocaleString('en-IN')} ÷ {metrics.productionMilkLitres.toLocaleString('en-IN')} L produced
+          </p>
+          <p className="mt-1 text-[11px] text-amber-800">
+            {metrics.milkLitres.toLocaleString('en-IN')} L collected + {metrics.milkFedLitres.toLocaleString('en-IN')} L used by calves
+          </p>
+          <div className="absolute bottom-0 left-0 right-0 h-1 bg-amber-500" />
+        </div>
+
+        {/* Internal calf milk use */}
+        <div className="relative overflow-hidden rounded-xl border border-blue-200/80 bg-white p-4 shadow-panel">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-blue-800">
+              Milk Used by Calves / Breeding
+            </span>
+            <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-blue-50 text-blue-700">
+              <Milk className="h-4 w-4" />
+            </span>
+          </div>
+          <div className="mt-2 flex items-baseline gap-1">
+            <span className="text-2xl font-black tracking-tight text-blue-950 sm:text-3xl">
+              {metrics.milkFedLitres.toLocaleString('en-IN', { maximumFractionDigits: 1 })}
+            </span>
+            <span className="text-xs text-ink-500">L</span>
+          </div>
+          <p className="mt-1 text-xs text-ink-500">
+            ₹{metrics.calfMilkCost.toLocaleString('en-IN', { maximumFractionDigits: 0 })} allocated production cost
+          </p>
+          <div className="absolute bottom-0 left-0 right-0 h-1 bg-blue-500" />
+        </div>
       </div>
+        <p className="text-xs text-ink-500">
+          Calf milk is estimated per day as cow-group milk production minus milk recorded in Daily Collection. Its allocated cost is included in the production-cost view and is not added again to cash expenses.
+        </p>
+      </section>
 
 
 

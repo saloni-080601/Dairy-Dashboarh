@@ -18,7 +18,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin}) => {
     setError('');
     const client = getSupabaseClient();
     if (!client) {
-      setError('Login ke liye pehle Supabase connect karein.');
+      setError('Connect Supabase before logging in.');
       return;
     }
 
@@ -31,7 +31,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin}) => {
       }
       onLogin();
     } catch {
-      setError('Login nahi ho paaya. Connection check karke dobara try karein.');
+      setError('Login failed. Check the connection and try again.');
     } finally {
       setIsLoading(false);
     }

@@ -38,7 +38,11 @@ export const AnalyticsCharts: React.FC = () => {
   }, [dailyRecords]);
 
   if (chartData.length === 0) {
-    return null;
+    return (
+      <div className="panel px-5 py-10 text-center text-sm text-ink-400">
+        Charts show up after the first day of milk is saved.
+      </div>
+    );
   }
 
   return (

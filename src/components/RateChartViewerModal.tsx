@@ -91,7 +91,7 @@ export const RateChartViewerModal: React.FC<RateChartViewerModalProps> = ({ onCl
   };
 
   const handleResetDefaults = async () => {
-    if (confirm('Kagaz ke official default chart par reset karna chahte hain?')) {
+    if (confirm('Reset the chart to the official default rates?')) {
       setCowChart(DEFAULT_COW_RATE_CHART);
       setBuffaloChart(DEFAULT_BUFFALO_RATE_CHART);
       saveStoredCowChart(DEFAULT_COW_RATE_CHART);
@@ -118,7 +118,7 @@ export const RateChartViewerModal: React.FC<RateChartViewerModalProps> = ({ onCl
             </div>
             <div>
               <h3 className="font-bold text-base tracking-tight flex items-center gap-2">
-                <span>Milk Rate Chart (Gaay & Bhains Matrix)</span>
+                <span>Milk rate chart (cow and buffalo)</span>
                 <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
                   Active Formula
                 </span>
@@ -167,7 +167,7 @@ export const RateChartViewerModal: React.FC<RateChartViewerModalProps> = ({ onCl
                   : 'bg-white text-slate-700 hover:bg-slate-50 border border-slate-200'
               }`}
             >
-              <span>🐄 GAAY Rate Chart (Fat 3.2 – 5.5)</span>
+              <span>Cow rate chart (fat 3.2 – 5.5)</span>
             </button>
 
             <button
@@ -178,13 +178,13 @@ export const RateChartViewerModal: React.FC<RateChartViewerModalProps> = ({ onCl
                   : 'bg-white text-slate-700 hover:bg-slate-50 border border-slate-200'
               }`}
             >
-              <span>🐃 BHAINS Rate Chart (Fat 8.0 – 10.0)</span>
+              <span>Buffalo rate chart (fat 8.0 – 10.0)</span>
             </button>
           </div>
 
           <div className="hidden sm:flex items-center gap-1.5 text-xs text-slate-500">
             <Info className="h-3.5 w-3.5 text-sky-600" />
-            <span>Kisi bhi cell par click karke rate badal sakte hain.</span>
+            <span>Click any cell to change its rate.</span>
           </div>
         </div>
 
