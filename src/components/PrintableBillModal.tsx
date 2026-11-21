@@ -18,38 +18,38 @@ export const PrintableBillModal: React.FC<PrintableBillModalProps> = ({ period, 
   };
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full overflow-hidden border border-slate-200">
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-900/60 p-2 pt-[max(env(safe-area-inset-top),0.75rem)] backdrop-blur-xs sm:items-center sm:p-4">
+      <div className="flex max-h-[calc(100dvh-1.5rem)] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl sm:max-h-[calc(100dvh-2rem)]">
 
         {/* Modal Action Header (Excluded from print via .no-print) */}
-        <div className="px-6 py-4 bg-slate-100 border-b border-slate-200 flex items-center justify-between no-print">
+        <div className="no-print flex shrink-0 flex-col gap-3 border-b border-slate-200 bg-slate-100 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-6 sm:py-4">
           <div className="flex items-center gap-2">
             <Printer className="h-5 w-5 text-sky-600" />
-            <h3 className="font-bold text-slate-800 text-sm">
+            <h3 className="text-sm font-bold text-slate-800">
               10-Day Milk Collection Statement & Bill Slip
             </h3>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex w-full items-center gap-2 sm:w-auto">
             <button
               onClick={handlePrint}
-              className="flex items-center gap-1.5 px-4 py-2 bg-sky-600 hover:bg-sky-700 text-white rounded-xl text-xs font-bold shadow-sm transition-colors"
+              className="flex min-h-11 flex-1 items-center justify-center gap-1.5 rounded-xl bg-sky-600 px-4 py-2 text-xs font-bold text-white shadow-sm transition-colors hover:bg-sky-700 sm:flex-none"
             >
               <Printer className="h-4 w-4" />
               <span>Print / Save as PDF</span>
             </button>
             <button
               onClick={onClose}
-              className="p-2 text-slate-400 hover:text-slate-600 rounded-xl hover:bg-slate-200 transition-colors"
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-slate-500 transition-colors hover:bg-slate-200 hover:text-slate-700"
               aria-label="Close bill and go back"
               title="Close and go back"
             >
-              <X className="h-5 w-5" />
+              <X className="h-6 w-6" />
             </button>
           </div>
         </div>
 
         {/* Printable Bill Slip Container */}
-        <div id="printable-bill-area" className="p-8 space-y-6 text-slate-900 bg-white">
+        <div id="printable-bill-area" className="space-y-6 overflow-y-auto bg-white p-4 text-slate-900 sm:p-8">
 
           {/* Dairy Header / Letterhead */}
           <div className="text-center border-b-2 border-slate-900 pb-4">
