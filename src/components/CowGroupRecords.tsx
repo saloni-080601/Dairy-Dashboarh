@@ -83,12 +83,32 @@ export const CowGroupRecords: React.FC = () => {
   // Form states
   const [entryCowId, setEntryCowId] = useState('');
   const [entrySession, setEntrySession] = useState<'morning' | 'evening'>('morning');
+  const [sessionPickerOpen, setSessionPickerOpen] = useState(true);
+  const [editingRecordKey, setEditingRecordKey] = useState<string | null>(null);
   const [quantity, setQuantity] = useState('');
+  const [bulkQuantities, setBulkQuantities] = useState<Record<string, string>>({});
   const [formMessage, setFormMessage] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [loadError, setLoadError] = useState('');
   const [showAddCow, setShowAddCow] = useState(false);
+
+  const availableCows = useMemo(() => cows.filter(cow => {
+    const record = cowRecords.find(item => item.cowId === cow.id && item.date === selectedDayDate && item.session === entrySession);
+    return !record || record.id === editingRecordKey;
+  }), [cows, cowRecords, selectedDayDate, entrySession, editingRecordKey]);
+
+  const savedForSelectedSession = useMemo(() => cowRecords.filter(record =>
+    record.date === selectedDayDate && record.session === entrySession
+  ), [cowRecords, selectedDayDate, entrySession]);
+
+  useEffect(() => {
+    if (!availableCows.some(cow => cow.id === entryCowId)) setEntryCowId(availableCows[0]?.id ?? '');
+  }, [availableCows, entryCowId]);
+
+  useEffect(() => {
+    setBulkQuantities({});
+  }, [selectedDayDate, entrySession]);
 
   // Load cows & records (Supabase with localStorage & default fallback)
   useEffect(() => {
@@ -382,6 +402,41 @@ export const CowGroupRecords: React.FC = () => {
 
   const saveCowMilk = async (event: React.FormEvent) => {
     event.preventDefault();
+
+    if (!editingRecordKey) {
+      const entries = availableCows
+        .map(cow => ({ cow, quantity: Number(bulkQuantities[cow.id]) }))
+        .filter(item => bulkQuantities[item.cow.id]?.trim() && Number.isFinite(item.quantity) && item.quantity > 0);
+      if (!entries.length) {
+        setFormMessage('Enter milk quantity for at least one available cow.');
+        return;
+      }
+
+      setIsSaving(true);
+      const savedRecords: CowMilkRecord[] = [];
+      for (const item of entries) {
+        const result = await saveCowMilkRecordApi({
+          cow_id: item.cow.id,
+          date: selectedDayDate,
+          session: entrySession,
+          quantity: item.quantity,
+        });
+        savedRecords.push(result.record
+          ? { id: result.record.id, cowId: result.record.cow_id, date: result.record.date, session: result.record.session, quantity: result.record.quantity }
+          : { id: `local-rec-${item.cow.id}-${selectedDayDate}-${entrySession}`, cowId: item.cow.id, date: selectedDayDate, session: entrySession, quantity: item.quantity });
+      }
+      setIsSaving(false);
+      setCowRecords(current => {
+        const savedKeys = new Set(savedRecords.map(record => `${record.cowId}:${record.date}:${record.session}`));
+        const updated = [...savedRecords, ...current.filter(record => !savedKeys.has(`${record.cowId}:${record.date}:${record.session}`))];
+        localStorage.setItem(STORAGE_KEY_COW_RECORDS, JSON.stringify(updated));
+        return updated;
+      });
+      setBulkQuantities({});
+      setFormMessage(`Saved ${savedRecords.length} ${entrySession} entr${savedRecords.length === 1 ? 'y' : 'ies'} for ${selectedDayDate}.`);
+      return;
+    }
+
     const milkQuantity = Number(quantity);
     if (!Number.isFinite(milkQuantity) || milkQuantity <= 0) {
       setFormMessage('Enter a milk quantity greater than 0.');
@@ -391,6 +446,13 @@ export const CowGroupRecords: React.FC = () => {
     const targetCow = cows.find(cow => cow.id === entryCowId);
     if (!targetCow) {
       setFormMessage('Select a cow first.');
+      return;
+    }
+
+    const duplicate = cowRecords.find(record => record.cowId === entryCowId
+      && record.date === selectedDayDate && record.session === entrySession);
+    if (duplicate && duplicate.id !== editingRecordKey) {
+      setFormMessage(`${targetCow.name} already has a ${entrySession} entry for this date. Delete or edit it first.`);
       return;
     }
 
@@ -430,14 +492,17 @@ export const CowGroupRecords: React.FC = () => {
 
     setSelectedCow(targetCow.name);
     setQuantity('');
+    setEditingRecordKey(null);
     setFormMessage(`Saved ${milkQuantity} L of ${entrySession} milk for ${targetCow.name}.`);
   };
 
   const handleQuickAddSession = (cow: CowProfile, session: 'morning' | 'evening', existingQty?: number | null) => {
+    const existing = cowRecords.find(record => record.cowId === cow.id && record.date === selectedDayDate && record.session === session);
     setEntryCowId(cow.id);
     setSelectedCow(cow.name);
     setEntrySession(session);
     setQuantity(existingQty ? String(existingQty) : '');
+    setEditingRecordKey(existing?.id ?? null);
     // Scroll smoothly to form if needed
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -584,7 +649,7 @@ export const CowGroupRecords: React.FC = () => {
 
             <div className="p-5">
               <form onSubmit={saveCowMilk} className="space-y-4">
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 items-end">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 items-end">
                   {/* Date Input */}
                   <div>
                     <label className="field-label flex items-center justify-between">
@@ -601,111 +666,94 @@ export const CowGroupRecords: React.FC = () => {
                       required
                       type="date"
                       value={selectedDayDate}
-                      onChange={e => setSelectedDayDate(e.target.value)}
+                      onChange={e => { setSelectedDayDate(e.target.value); setEditingRecordKey(null); }}
                       className="field-input font-sans text-xs"
                     />
-                  </div>
-
-                  {/* Cow Select */}
-                  <div>
-                    <label className="field-label">Select Cow</label>
-                    <select
-                      required
-                      value={entryCowId}
-                      onChange={e => {
-                        setEntryCowId(e.target.value);
-                        const c = cows.find(item => item.id === e.target.value);
-                        if (c) setSelectedCow(c.name);
-                      }}
-                      className="field-input font-sans text-xs font-semibold"
-                    >
-                      <option value="">Select cow</option>
-                      {cows.map(cow => (
-                        <option key={cow.id} value={cow.id}>
-                          {cow.name}
-                        </option>
-                      ))}
-                    </select>
                   </div>
 
                   {/* Session Toggle */}
                   <div>
                     <label className="field-label">Session</label>
-                    <div className="grid grid-cols-2 gap-1 rounded-lg bg-ink-100 p-1">
+                    {sessionPickerOpen ? (
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          type="button"
+                          onClick={() => { setEntrySession('morning'); setSessionPickerOpen(false); setEditingRecordKey(null); setQuantity(''); setBulkQuantities({}); }}
+                          className={`flex items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-sm font-bold transition ${entrySession === 'morning' ? 'bg-amber-100 text-amber-900 ring-1 ring-amber-300' : 'border border-ink-200 bg-white text-ink-600 hover:bg-amber-50'}`}
+                        >
+                          <Sun className="h-4 w-4 text-amber-600" /> Morning
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => { setEntrySession('evening'); setSessionPickerOpen(false); setEditingRecordKey(null); setQuantity(''); setBulkQuantities({}); }}
+                          className={`flex items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-sm font-bold transition ${entrySession === 'evening' ? 'bg-indigo-100 text-indigo-900 ring-1 ring-indigo-300' : 'border border-ink-200 bg-white text-ink-600 hover:bg-indigo-50'}`}
+                        >
+                          <Moon className="h-4 w-4 text-indigo-600" /> Evening
+                        </button>
+                      </div>
+                    ) : (
                       <button
                         type="button"
-                        onClick={() => setEntrySession('morning')}
-                        className={`flex items-center justify-center gap-1.5 rounded-md py-1.5 text-xs font-semibold transition ${
-                          entrySession === 'morning'
-                            ? 'bg-white text-ink-900 shadow-xs'
-                            : 'text-ink-600 hover:text-ink-900'
-                        }`}
+                        onClick={() => setSessionPickerOpen(true)}
+                        className={`flex w-full items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-sm font-bold transition ${entrySession === 'morning' ? 'bg-amber-100 text-amber-900 ring-1 ring-amber-300 hover:bg-amber-200' : 'bg-indigo-100 text-indigo-900 ring-1 ring-indigo-300 hover:bg-indigo-200'}`}
+                        aria-label={`Selected ${entrySession}. Tap to change session.`}
                       >
-                        <Sun className="h-3.5 w-3.5 text-amber-500" /> Morning
+                        {entrySession === 'morning' ? <Sun className="h-4 w-4 text-amber-600" /> : <Moon className="h-4 w-4 text-indigo-600" />}
+                        <span>{entrySession === 'morning' ? 'Morning' : 'Evening'}</span>
+                        <span className="text-xs font-medium opacity-70">· Tap to change</span>
                       </button>
-                      <button
-                        type="button"
-                        onClick={() => setEntrySession('evening')}
-                        className={`flex items-center justify-center gap-1.5 rounded-md py-1.5 text-xs font-semibold transition ${
-                          entrySession === 'evening'
-                            ? 'bg-white text-ink-900 shadow-xs'
-                            : 'text-ink-600 hover:text-ink-900'
-                        }`}
-                      >
-                        <Moon className="h-3.5 w-3.5 text-indigo-500" /> Evening
-                      </button>
-                    </div>
+                    )}
                   </div>
 
-                  {/* Milk Quantity Input */}
-                  <div>
-                    <label className="field-label">Milk Quantity (L)</label>
-                    <div className="relative">
-                      <input
-                        required
-                        min="0.1"
-                        step="0.1"
-                        type="number"
-                        inputMode="decimal"
-                        value={quantity}
-                        onChange={e => setQuantity(e.target.value)}
-                        placeholder="e.g. 5.5"
-                        className="field-input pr-9 font-mono text-base font-semibold"
-                      />
-                      <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-ink-400">
-                        L
-                      </span>
-                    </div>
-                  </div>
                 </div>
 
-                {/* Quick Cow Select Pills */}
-                <div>
-                  <div className="mb-1.5 flex items-center justify-between">
-                    <span className="text-[10px] font-semibold uppercase tracking-[0.1em] text-ink-400">
-                      Quick select cow
-                    </span>
-                    <span className="text-[10px] text-ink-400">Tap to select cow for entry</span>
+                {savedForSelectedSession.length > 0 && !editingRecordKey && (
+                  <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3.5 py-3 text-xs text-amber-950" role="status">
+                    <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-amber-700" />
+                    <p>
+                      <span className="font-bold">इस तारीख की {entrySession === 'morning' ? 'Morning' : 'Evening'} एंट्री पहले से दर्ज है</span>
+                      {' '}({savedForSelectedSession.length} गायों की)। मौजूदा एंट्री बदलने के लिए नीचे Daily Collection table में quantity पर टैप करें; हटाने के लिए delete बटन दबाएँ।
+                    </p>
                   </div>
-                  <div className="flex flex-wrap gap-1.5">
-                    {cows.map(cow => {
-                      const isSelected = entryCowId === cow.id;
+                )}
+
+                {/* Bulk quantity entry for every cow in this collection */}
+                <div className="rounded-xl border border-ink-100 bg-ink-50/60 p-4">
+                  <div className="mb-1.5 flex items-center justify-between">
+                    <span className="text-xs font-bold text-ink-800">
+                      {editingRecordKey ? `Edit ${selectedCow} ${entrySession} entry` : `Enter ${entrySession} litres for all cows`}
+                    </span>
+                    <span className="text-[10px] text-ink-500">Fill any number of rows, then save together</span>
+                  </div>
+                  <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
+                    {(editingRecordKey ? cows.filter(cow => cow.id === entryCowId) : availableCows).map(cow => {
+                      const existing = cowRecords.find(record => record.cowId === cow.id && record.date === selectedDayDate && record.session === entrySession);
+                      const isEditingThis = existing?.id === editingRecordKey;
+                      const isOpen = !existing || isEditingThis;
+                      const lockedForEdit = Boolean(editingRecordKey && !isEditingThis);
                       return (
-                        <button
-                          key={cow.id}
-                          type="button"
-                          onClick={() => {
-                            setEntryCowId(cow.id);
-                            setSelectedCow(cow.name);
-                          }}
-                          className={`rounded-lg px-3 py-1 text-xs font-semibold transition ${
-                            isSelected
-                              ? 'bg-forest-800 text-white shadow-xs'
-                              : 'border border-ink-200 bg-white text-ink-600 hover:bg-ink-50'
-                          }`}
-                        >
-                          {cow.name}
-                        </button>
+                        <label key={cow.id} className={`rounded-lg border p-2.5 ${isOpen ? 'border-ink-200 bg-white' : 'border-forest-100 bg-forest-50/70'}`}>
+                          <span className="mb-1.5 flex items-center justify-between text-xs font-bold text-ink-800">
+                            {cow.name}
+                            {existing && !isEditingThis && <span className="text-[10px] font-semibold text-forest-700">Saved · {existing.quantity} L</span>}
+                          </span>
+                          <span className="relative block">
+                            <input
+                              type="number"
+                              min="0.1"
+                              step="0.1"
+                              inputMode="decimal"
+                              disabled={!isOpen || lockedForEdit || isSaving}
+                              value={isEditingThis ? quantity : (bulkQuantities[cow.id] ?? '')}
+                              onChange={event => isEditingThis
+                                ? setQuantity(event.target.value)
+                                : setBulkQuantities(current => ({ ...current, [cow.id]: event.target.value }))}
+                              placeholder={isOpen ? '0.0' : 'Done'}
+                              className="field-input pr-8 py-2 font-mono text-sm font-semibold disabled:bg-ink-50 disabled:text-ink-400"
+                            />
+                            <span className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] font-bold text-ink-400">L</span>
+                          </span>
+                        </label>
                       );
                     })}
                   </div>
@@ -733,11 +781,11 @@ export const CowGroupRecords: React.FC = () => {
 
                   <button
                     type="submit"
-                    disabled={!cows.length || isLoading || isSaving}
+                    disabled={(!editingRecordKey && !Object.values(bulkQuantities).some(value => value.trim())) || isLoading || isSaving}
                     className="btn-primary min-h-10 px-6 font-semibold"
                   >
                     <Plus className="h-4 w-4" />
-                    <span>{isSaving ? 'Saving…' : 'Save Milk Record'}</span>
+                    <span>{isSaving ? 'Saving…' : editingRecordKey ? 'Update Milk Record' : 'Save All Entries'}</span>
                   </button>
                 </div>
               </form>
@@ -776,7 +824,7 @@ export const CowGroupRecords: React.FC = () => {
                 <input
                   type="date"
                   value={selectedDayDate}
-                  onChange={e => setSelectedDayDate(e.target.value)}
+                  onChange={e => { setSelectedDayDate(e.target.value); setEditingRecordKey(null); }}
                   className="rounded-lg border border-ink-200 bg-white px-2.5 py-1 text-xs font-semibold text-ink-800 outline-none focus:border-forest-600 focus:ring-1 focus:ring-forest-600"
                 />
 
@@ -863,9 +911,9 @@ export const CowGroupRecords: React.FC = () => {
                         <td>
                           {row.morningQty !== null ? (
                             <div className="flex items-center gap-1.5">
-                              <span className="font-mono text-sm font-semibold text-ink-900">
+                              <button type="button" onClick={() => handleQuickAddSession(row.cow, 'morning', row.morningQty)} className="font-mono text-sm font-semibold text-ink-900 hover:text-forest-700" title="Edit morning record">
                                 {litres(row.morningQty)}
-                              </span>
+                              </button>
                               <button
                                 type="button"
                                 onClick={() => handleDeleteRecord(row.cow.id, selectedDayDate, 'morning')}
@@ -890,9 +938,9 @@ export const CowGroupRecords: React.FC = () => {
                         <td>
                           {row.eveningQty !== null ? (
                             <div className="flex items-center gap-1.5">
-                              <span className="font-mono text-sm font-semibold text-ink-900">
+                              <button type="button" onClick={() => handleQuickAddSession(row.cow, 'evening', row.eveningQty)} className="font-mono text-sm font-semibold text-ink-900 hover:text-forest-700" title="Edit evening record">
                                 {litres(row.eveningQty)}
-                              </span>
+                              </button>
                               <button
                                 type="button"
                                 onClick={() => handleDeleteRecord(row.cow.id, selectedDayDate, 'evening')}
